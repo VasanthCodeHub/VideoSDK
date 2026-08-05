@@ -6,12 +6,12 @@
     android:orientation="vertical"
     android:padding="28dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/your_room_id"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="13sp"/>
+<TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/your_room_id"
+            android:textColor="@color/on_surface_variant"
+            android:textSize="13sp"/>
 
     <TextView
         android:id="@+id/room_code"
@@ -20,7 +20,7 @@
         android:layout_marginTop="10dp"
         android:fontFamily="monospace"
         android:letterSpacing="0.2"
-        android:textColor="?attr/colorOnSurface"
+        android:textColor="@color/on_surface"
         android:textIsSelectable="true"
         android:textSize="34sp"
         android:textStyle="bold"/>
@@ -31,7 +31,7 @@
         android:layout_marginTop="8dp"
         android:gravity="center"
         android:text="@string/share_room_hint"
-        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textColor="@color/on_surface_variant"
         android:textSize="13sp"/>
 
     <LinearLayout
@@ -53,18 +53,18 @@
                 android:layout_width="52dp"
                 android:layout_height="52dp"
                 android:background="@drawable/bg_icon_circle"
-                android:backgroundTint="?attr/colorSurfaceVariant"
+                android:backgroundTint="@color/surface_container_high"
                 android:contentDescription="@string/copy"
                 android:scaleType="centerInside"
                 android:src="@drawable/ic_copy"
-                android:tint="?attr/colorOnSurface"/>
+                android:tint="@color/on_surface"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="@string/copy"
-                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textColor="@color/on_surface_variant"
                 android:textSize="12sp"/>
         </LinearLayout>
 
@@ -80,18 +80,18 @@
                 android:layout_width="52dp"
                 android:layout_height="52dp"
                 android:background="@drawable/bg_icon_circle"
-                android:backgroundTint="?attr/colorSurfaceVariant"
+                android:backgroundTint="@color/surface_container_high"
                 android:contentDescription="@string/share"
                 android:scaleType="centerInside"
                 android:src="@drawable/ic_share"
-                android:tint="?attr/colorOnSurface"/>
+                android:tint="@color/on_surface"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="@string/share"
-                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textColor="@color/on_surface_variant"
                 android:textSize="12sp"/>
         </LinearLayout>
 
@@ -107,18 +107,18 @@
                 android:layout_width="52dp"
                 android:layout_height="52dp"
                 android:background="@drawable/bg_icon_circle"
-                android:backgroundTint="?attr/colorPrimary"
+                android:backgroundTint="@color/primary"
                 android:contentDescription="@string/start_call"
                 android:scaleType="centerInside"
                 android:src="@drawable/ic_play"
-                android:tint="?attr/colorOnPrimary"/>
+                android:tint="@color/on_primary"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="@string/start_call"
-                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textColor="@color/on_surface_variant"
                 android:textSize="12sp"/>
         </LinearLayout>
 
