@@ -28,8 +28,8 @@
         <item name="android:windowBackground">@color/background</item>
         <item name="android:statusBarColor">@color/background</item>
         <item name="android:navigationBarColor">@color/background</item>
-        <item name="android:navigationBarDividerColor">@color/surface_variant</item>
-        <item name="android:forceDarkAllowed">false</item>
+        <item name="android:navigationBarDividerColor" tools:targetApi="o_mr1">@color/surface_variant</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
     </style>
 
     <!-- Filled pill button: Create Meeting (bg-primary, text-on-primary) -->

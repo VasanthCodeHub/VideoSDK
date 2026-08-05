@@ -9,7 +9,6 @@ import android.os.Bundle
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
-import android.widget.LinearLayout
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -45,9 +44,6 @@ class LobbyActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.enter_room_id, Toast.LENGTH_SHORT).show()
         }
 
-        findViewById<LinearLayout>(R.id.nav_meetings).setOnClickListener { navigateSnippet() }
-        findViewById<LinearLayout>(R.id.nav_chat).setOnClickListener { navigateSnippet() }
-        findViewById<LinearLayout>(R.id.nav_settings).setOnClickListener { navigateSnippet() }
         findViewById<View>(R.id.btn_account).setOnClickListener { navigateSnippet() }
     }
 
@@ -68,7 +64,8 @@ class LobbyActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             dialog.dismiss()
-            startCall(roomId, etBroker.text.toString().trim())
+            val demo = view.findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.sw_demo).isChecked
+            startCall(roomId, etBroker.text.toString().trim(), demo)
         }
 
         dialog.show()
@@ -94,7 +91,8 @@ class LobbyActivity : AppCompatActivity() {
         }
         view.findViewById<View>(R.id.btn_start).setOnClickListener {
             dialog.dismiss()
-            startCall(roomId, broker)
+            val demo = view.findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.sw_demo).isChecked
+            startCall(roomId, broker, demo)
         }
 
         dialog.show()
@@ -112,12 +110,14 @@ class LobbyActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(send, getString(R.string.share_room_title)))
     }
 
-    private fun startCall(roomId: String, broker: String) {
+    private fun startCall(roomId: String, broker: String, demo: Boolean = false) {
         startActivity(
             Intent(this, MainActivity::class.java)
                 .putExtra(EXTRA_BROKER, broker.ifEmpty { DEFAULT_BROKER })
                 .putExtra(EXTRA_ROOM, roomId)
-                .putExtra(EXTRA_NAME, Build.MODEL),
+                .putExtra(EXTRA_NAME, Build.MODEL)
+                .putExtra(EXTRA_DEMO, demo)
+                .putExtra(EXTRA_PEERS, DEFAULT_DEMO_PEERS),
         )
     }
 
@@ -130,7 +130,10 @@ class LobbyActivity : AppCompatActivity() {
         const val EXTRA_BROKER = "broker"
         const val EXTRA_ROOM = "room"
         const val EXTRA_NAME = "name"
+        const val EXTRA_DEMO = "demo"
+        const val EXTRA_PEERS = "peers"
         const val DEFAULT_BROKER = "ws://10.0.2.2:3000"
+        const val DEFAULT_DEMO_PEERS = 6
         const val ROOM_ID_LENGTH = 6
         const val ROOM_CLIP_LABEL = "videocall_room_id"
         const val MEETING_1_ROOM = "842194"

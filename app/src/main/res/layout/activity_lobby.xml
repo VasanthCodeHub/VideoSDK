@@ -66,7 +66,7 @@
             android:layout_weight="1"
             android:background="@color/background"
             android:fillViewport="true"
-            android:paddingBottom="120dp">
+            android:paddingBottom="32dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -79,6 +79,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
                     android:orientation="horizontal">
 
                     <com.google.android.material.button.MaterialButton
@@ -88,10 +89,14 @@
                         android:layout_height="64dp"
                         android:layout_marginEnd="8dp"
                         android:layout_weight="1"
+                        android:insetBottom="0dp"
+                        android:insetTop="0dp"
                         android:text="@string/join_meeting"
+                        android:textAlignment="center"
                         app:icon="@drawable/ic_keyboard"
                         app:iconGravity="textStart"
                         app:iconPadding="8dp"
+                        app:iconSize="24dp"
                         app:iconTint="@color/on_surface" />
 
                     <com.google.android.material.button.MaterialButton
@@ -101,10 +106,14 @@
                         android:layout_height="64dp"
                         android:layout_marginStart="8dp"
                         android:layout_weight="1"
+                        android:insetBottom="0dp"
+                        android:insetTop="0dp"
                         android:text="@string/create_meeting"
+                        android:textAlignment="center"
                         app:icon="@drawable/ic_video_call"
                         app:iconGravity="textStart"
                         app:iconPadding="8dp"
+                        app:iconSize="24dp"
                         app:iconTint="@color/on_primary" />
                 </LinearLayout>
 
@@ -353,137 +362,5 @@
             </LinearLayout>
         </ScrollView>
     </LinearLayout>
-
-    <!-- BottomNavBar (Mobile Only) -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/bottom_nav"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginBottom="24dp"
-        app:cardBackgroundColor="@color/surface"
-        app:cardCornerRadius="32dp"
-        app:cardElevation="8dp"
-        app:strokeColor="@color/outline_variant"
-        app:strokeWidth="1dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="8dp">
-
-            <LinearLayout
-                android:id="@+id/nav_home"
-                android:layout_width="72dp"
-                android:layout_height="wrap_content"
-                android:background="@drawable/bg_nav_active"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="8dp">
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:contentDescription="@string/nav_home"
-                    android:src="@drawable/ic_home"
-                    app:tint="@color/on_surface" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/nav_home"
-                    android:textColor="@color/on_surface"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/nav_meetings"
-                android:layout_width="72dp"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="8dp">
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:contentDescription="@string/nav_meetings"
-                    android:src="@drawable/ic_video_call"
-                    app:tint="@color/on_surface_variant" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/nav_meetings"
-                    android:textColor="@color/on_surface_variant"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/nav_chat"
-                android:layout_width="72dp"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="8dp">
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:contentDescription="@string/nav_chat"
-                    android:src="@drawable/ic_forum"
-                    app:tint="@color/on_surface_variant" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/nav_chat"
-                    android:textColor="@color/on_surface_variant"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/nav_settings"
-                android:layout_width="72dp"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="8dp">
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:contentDescription="@string/nav_settings"
-                    android:src="@drawable/ic_settings"
-                    app:tint="@color/on_surface_variant" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/nav_settings"
-                    android:textColor="@color/on_surface_variant"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/sw_demo"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="@string/demo_mode"/>
-
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
 
 </FrameLayout>

@@ -1,17 +1,18 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center_horizontal"
     android:orientation="vertical"
     android:padding="28dp">
 
-<TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/your_room_id"
-            android:textColor="@color/on_surface_variant"
-            android:textSize="13sp"/>
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/your_room_id"
+        android:textColor="@color/on_surface_variant"
+        android:textSize="13sp"/>
 
     <TextView
         android:id="@+id/room_code"
@@ -57,7 +58,7 @@
                 android:contentDescription="@string/copy"
                 android:scaleType="centerInside"
                 android:src="@drawable/ic_copy"
-                android:tint="@color/on_surface"/>
+                app:tint="@color/on_surface"/>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -84,7 +85,7 @@
                 android:contentDescription="@string/share"
                 android:scaleType="centerInside"
                 android:src="@drawable/ic_share"
-                android:tint="@color/on_surface"/>
+                app:tint="@color/on_surface"/>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -111,7 +112,7 @@
                 android:contentDescription="@string/start_call"
                 android:scaleType="centerInside"
                 android:src="@drawable/ic_play"
-                android:tint="@color/on_primary"/>
+                app:tint="@color/on_primary"/>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -123,4 +124,12 @@
         </LinearLayout>
 
     </LinearLayout>
+
+    <com.google.android.material.materialswitch.MaterialSwitch
+        android:id="@+id/sw_demo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/demo_mode"
+        android:textColor="@color/on_surface_variant" />
 </LinearLayout>

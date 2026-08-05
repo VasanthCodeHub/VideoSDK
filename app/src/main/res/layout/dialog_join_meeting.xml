@@ -65,6 +65,14 @@
             android:textColor="@color/on_surface" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <com.google.android.material.materialswitch.MaterialSwitch
+        android:id="@+id/sw_demo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/demo_mode"
+        android:textColor="@color/on_surface_variant" />
+
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_join"
         style="@style/Widget.VideoCall.ChipPill"
