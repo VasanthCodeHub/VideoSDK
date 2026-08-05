@@ -3,34 +3,81 @@
     <style name="Base.Theme.VideoCall" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="colorPrimaryContainer">@color/primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/on_primary_container</item>
         <item name="colorSecondary">@color/secondary</item>
         <item name="colorOnSecondary">@color/on_secondary</item>
+        <item name="colorSecondaryContainer">@color/secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/on_secondary_container</item>
         <item name="colorSurface">@color/surface</item>
         <item name="colorOnSurface">@color/on_surface</item>
         <item name="colorSurfaceVariant">@color/surface_variant</item>
         <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
+        <item name="colorSurfaceDim">@color/surface_dim</item>
+        <item name="colorSurfaceBright">@color/surface_bright</item>
+        <item name="colorSurfaceContainerLowest">@color/surface_lowest</item>
+        <item name="colorSurfaceContainerLow">@color/surface_low</item>
+        <item name="colorSurfaceContainer">@color/surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/surface_container_high</item>
+        <item name="colorSurfaceContainerHighest">@color/surface_container_highest</item>
+        <item name="colorOutline">@color/outline</item>
+        <item name="colorOutlineVariant">@color/outline_variant</item>
+        <item name="colorError">@color/error</item>
+        <item name="colorErrorContainer">@color/error_container</item>
+        <item name="colorOnError">@color/on_error</item>
         <item name="android:windowBackground">@color/background</item>
         <item name="android:statusBarColor">@color/background</item>
         <item name="android:navigationBarColor">@color/background</item>
-        <item name="android:navigationBarDividerColor" tools:targetApi="o_mr1">@color/surface_variant</item>
-        <item name="materialButtonStyle">@style/Widget.VideoCall.ControlButton</item>
+        <item name="android:navigationBarDividerColor">@color/surface_variant</item>
+        <item name="android:forceDarkAllowed">false</item>
     </style>
 
-    <style name="Widget.VideoCall.ControlButton" parent="Widget.Material3.Button">
-        <item name="android:minHeight">48dp</item>
+    <!-- Filled pill button: Create Meeting (bg-primary, text-on-primary) -->
+    <style name="Widget.VideoCall.PillButton" parent="Widget.Material3.Button">
+        <item name="android:minHeight">64dp</item>
+        <item name="android:minWidth">0dp</item>
         <item name="android:textAllCaps">false</item>
-        <item name="android:textColor">?attr/colorOnPrimary</item>
-        <item name="android:backgroundTint">@color/primary</item>
-        <item name="shapeAppearance">@style/ShapeAppearance.VideoCall.Button</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/on_primary</item>
+        <item name="backgroundTint">@color/primary</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.VideoCall.Pill</item>
     </style>
 
-    <style name="ShapeAppearance.VideoCall.Button" parent="ShapeAppearance.Material3.SmallComponent">
+    <!-- Outlined pill button: Join Meeting (border-outline-variant, text-on-surface) -->
+    <style name="Widget.VideoCall.PillButton.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:minHeight">64dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/on_surface</item>
+        <item name="strokeWidth">2dp</item>
+        <item name="strokeColor">@color/outline_variant</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="rippleColor">@color/surface_container_high</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.VideoCall.Pill</item>
+    </style>
+
+    <!-- Small pill button used in bottom nav / dialogs -->
+    <style name="Widget.VideoCall.ChipPill" parent="Widget.Material3.Button">
+        <item name="android:minHeight">40dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/on_primary</item>
+        <item name="backgroundTint">@color/primary</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.VideoCall.Pill</item>
+    </style>
+
+    <style name="ShapeAppearance.VideoCall.Pill" parent="ShapeAppearance.Material3.SmallComponent">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">16dp</item>
+        <item name="cornerSize">32dp</item>
     </style>
 
     <style name="ThemeOverlay.VideoCall.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
-        <item name="colorSurface">@color/background</item>
+        <item name="colorSurface">@color/surface_container</item>
         <item name="colorOnSurface">@color/on_surface</item>
         <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
         <item name="colorPrimary">@color/primary</item>

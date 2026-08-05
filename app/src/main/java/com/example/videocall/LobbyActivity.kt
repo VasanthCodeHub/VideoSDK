@@ -6,13 +6,14 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.LinearLayout
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
 import java.security.SecureRandom
 
 /**
@@ -26,29 +27,54 @@ class LobbyActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_lobby)
 
-        val btnCreate = findViewById<Button>(R.id.btn_create)
-        val btnJoin = findViewById<Button>(R.id.btn_join)
-        val etRoom = findViewById<EditText>(R.id.et_room)
-        val etBroker = findViewById<EditText>(R.id.et_broker)
-        val swDemo = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.sw_demo)
+        findViewById<MaterialButton>(R.id.btn_create_meeting).setOnClickListener {
+            val roomId = generateRoomId()
+            showRoomDialog(roomId, DEFAULT_BROKER)
+        }
+        findViewById<MaterialButton>(R.id.btn_join_meeting).setOnClickListener {
+            showJoinDialog()
+        }
 
+        findViewById<TextView>(R.id.btn_rejoin_1).setOnClickListener {
+            startCall(MEETING_1_ROOM, DEFAULT_BROKER)
+        }
+        findViewById<TextView>(R.id.btn_rejoin_2).setOnClickListener {
+            startCall(MEETING_2_ROOM, DEFAULT_BROKER)
+        }
+        findViewById<TextView>(R.id.btn_view_all).setOnClickListener {
+            Toast.makeText(this, R.string.enter_room_id, Toast.LENGTH_SHORT).show()
+        }
+
+        findViewById<LinearLayout>(R.id.nav_meetings).setOnClickListener { navigateSnippet() }
+        findViewById<LinearLayout>(R.id.nav_chat).setOnClickListener { navigateSnippet() }
+        findViewById<LinearLayout>(R.id.nav_settings).setOnClickListener { navigateSnippet() }
+        findViewById<View>(R.id.btn_account).setOnClickListener { navigateSnippet() }
+    }
+
+    private fun showJoinDialog() {
+        val view = layoutInflater.inflate(R.layout.dialog_join_meeting, null)
+        val etRoom = view.findViewById<EditText>(R.id.et_room)
+        val etBroker = view.findViewById<EditText>(R.id.et_broker)
         etBroker.setText(DEFAULT_BROKER)
 
-        btnCreate.setOnClickListener {
-            val roomId = generateRoomId()
-            showRoomDialog(roomId, etBroker.text.toString().trim(), swDemo.isChecked)
-        }
-        btnJoin.setOnClickListener {
+        val dialog = AlertDialog.Builder(this)
+            .setView(view)
+            .create()
+
+        view.findViewById<MaterialButton>(R.id.btn_join).setOnClickListener {
             val roomId = etRoom.text.toString().trim().uppercase()
             if (roomId.isEmpty()) {
                 Toast.makeText(this, R.string.enter_room_id, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            startCall(roomId, etBroker.text.toString().trim(), swDemo.isChecked)
+            dialog.dismiss()
+            startCall(roomId, etBroker.text.toString().trim())
         }
+
+        dialog.show()
     }
 
-    private fun showRoomDialog(roomId: String, broker: String, demo: Boolean) {
+    private fun showRoomDialog(roomId: String, broker: String) {
         val view = layoutInflater.inflate(R.layout.dialog_room_code, null)
         view.findViewById<TextView>(R.id.room_code).text = roomId
 
@@ -68,10 +94,14 @@ class LobbyActivity : AppCompatActivity() {
         }
         view.findViewById<View>(R.id.btn_start).setOnClickListener {
             dialog.dismiss()
-            startCall(roomId, broker, demo)
+            startCall(roomId, broker)
         }
 
         dialog.show()
+    }
+
+    private fun navigateSnippet() {
+        Toast.makeText(this, R.string.lobby_subtitle, Toast.LENGTH_SHORT).show()
     }
 
     private fun shareRoomId(roomId: String) {
@@ -82,14 +112,12 @@ class LobbyActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(send, getString(R.string.share_room_title)))
     }
 
-    private fun startCall(roomId: String, broker: String, demo: Boolean) {
+    private fun startCall(roomId: String, broker: String) {
         startActivity(
             Intent(this, MainActivity::class.java)
                 .putExtra(EXTRA_BROKER, broker.ifEmpty { DEFAULT_BROKER })
                 .putExtra(EXTRA_ROOM, roomId)
-                .putExtra(EXTRA_NAME, Build.MODEL)
-                .putExtra(EXTRA_DEMO, demo)
-                .putExtra(EXTRA_PEERS, DEFAULT_DEMO_PEERS),
+                .putExtra(EXTRA_NAME, Build.MODEL),
         )
     }
 
@@ -102,12 +130,11 @@ class LobbyActivity : AppCompatActivity() {
         const val EXTRA_BROKER = "broker"
         const val EXTRA_ROOM = "room"
         const val EXTRA_NAME = "name"
-        const val EXTRA_DEMO = "demo"
-        const val EXTRA_PEERS = "peers"
         const val DEFAULT_BROKER = "ws://10.0.2.2:3000"
-        const val DEFAULT_DEMO_PEERS = 6
         const val ROOM_ID_LENGTH = 6
         const val ROOM_CLIP_LABEL = "videocall_room_id"
+        const val MEETING_1_ROOM = "842194"
+        const val MEETING_2_ROOM = "119450"
         val ROOM_ID_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
         val secureRandom = SecureRandom()
     }
