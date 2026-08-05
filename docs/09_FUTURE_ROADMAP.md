@@ -13,12 +13,16 @@
 
 ## Phase 2 — Call UX (current target)
 
-- **VC-001** Camera Switch (front/back)
-- **VC-002** Per-peer mute/camera-off badges
-- **VC-003** Participant list
-- **VC-004** Connection status indicator
-- **VC-009** Landscape + responsive tile grid
-- **VC-007** In-call text chat
+- **VC-001** Camera Switch (front/back) — ✅
+- **VC-002** Per-peer mute/camera-off badges — ✅
+- **VC-003** Participant list — ✅
+- **VC-004** Connection status indicator — ◐ (per-peer dots + broker banner; disconnect toast pending)
+- **VC-009** Landscape + responsive tile grid — ✅
+- **VC-007** In-call text chat — pending
+
+> Dev note: Phase 2 UI is verified offline via **demo mode** (`MeshCall.joinDemo`,
+> mock signaling client with up to 10 simulated peers) until the Node.js broker is
+> available. See `02_ANDROID_APP.md` → Demo mode.
 
 Exit criteria: two phones + one tablet in a room, all media + chat stable in
 portrait and landscape.

@@ -42,9 +42,15 @@ central media server**:
 ## Features completed
 
 - Lobby: Create Room (auto-generated 6-char code) with Copy / Share / Start modal
-- Lobby: Join Room with shared code; configurable signaling server field
-- In-call screen: room code badge, local camera preview (top-right, mirrored),
-  dynamic remote video tiles, mic / camera / end-call FAB controls
+- Lobby: Join Room with shared code; configurable signaling server field; **Demo mode
+  switch** (offline: drives the in-call UI with a simulated 6-peer room, no broker needed)
+- In-call screen: room code badge (tap to copy), call timer, signaling connection
+  banner, participants panel (names + live mic/camera state + count)
+- **Responsive remote tile grid** (1–9 peers): non-overlapping cells, name chips,
+  mic/camera-off badges, per-peer connection dots, avatar placeholders for
+  camera-off peers; reflows on rotation/resize
+- Front/back **camera switch** control
+- Local camera preview (top-right, mirrored), mic / camera / end-call FAB controls
 - Full-mesh WebRTC session (each phone ↔ every other phone, N-1 uplinks)
 - Per-link video bitrate cap (500 kbps) for multi-participant mesh usability
 - Runtime camera + mic permission flow
@@ -53,12 +59,9 @@ central media server**:
 
 ## Features not yet implemented
 
-- Front/back camera switch
-- Per-peer mute / camera-off badges, participant list
-- Connection/ICE status UI, call timer
-- Text chat (WebRTC DataChannel or signaling relay)
+- In-call text chat (WebRTC DataChannel or signaling relay)
 - STUN/TURN support (calls across different networks)
-- Video quality presets, landscape layout
+- Video quality presets, per-peer disconnect toast
 - Foreground service / background call, recording
 - Incoming-call/deep-link invitations, authentication
 

@@ -1,6 +1,8 @@
 package dev.meshcall.sdk.api
 
 import android.content.Context
+import dev.meshcall.sdk.internal.demo.MockSignalingClient
+import dev.meshcall.sdk.internal.demo.MockRoomData
 import dev.meshcall.sdk.internal.media.MediaConfig
 import dev.meshcall.sdk.internal.mesh.MeshCallManager
 import kotlinx.coroutines.CoroutineScope
@@ -63,6 +65,34 @@ class MeshCall(context: Context) {
         manager = m
         m.join(roomId, MediaConfig())
         _stateFlow = m.roomState.map(::mapState)
+        _connectedFlow = m.signalingConnected
+    }
+
+    /**
+     * Demo-only join that uses [MockSignalingClient] instead of a real broker, so the
+     * in-call UI can be exercised offline (tiles, badges, roster churn for up to
+     * [MockRoomData.participants] peers). Production flows must use [join].
+     *
+     * @param roomId          any identifier; shown in the room-code badge
+     * @param displayName     this device's name
+     * @param simulatedPeers  how many remote participants to simulate (2..10)
+     */
+    fun joinDemo(
+        roomId: String,
+        displayName: String,
+        simulatedPeers: Int,
+    ) {
+        leave()
+        val m = MeshCallManager(
+            appContext,
+            "mock://local",
+            userId,
+            displayName,
+        ) { _ -> MockSignalingClient(userId, displayName, simulatedPeers) }
+        manager = m
+        m.join(roomId, MediaConfig())
+        _stateFlow = m.roomState.map(::mapState)
+        _connectedFlow = m.signalingConnected
     }
 
     private val userId: String
@@ -76,10 +106,22 @@ class MeshCall(context: Context) {
     private var _stateFlow: Flow<MeshCallState> = flowOf(MeshCallState.IDLE)
     val state: Flow<MeshCallState> get() = _stateFlow
 
+    /** True while the signaling transport is connected to the broker (or mock). */
+    private var _connectedFlow: Flow<Boolean> = flowOf(false)
+    val connected: Flow<Boolean> get() = _connectedFlow
+
     /** Roster of remote participants (excluding self). */
     val peers: Flow<List<MeshRoomPeer>>
         get() = manager?.peers?.map { list ->
-            list.map { MeshRoomPeer(it.id, it.userName, it.micEnabled, it.cameraEnabled) }
+            list.map {
+                MeshRoomPeer(
+                    id = it.id,
+                    userName = it.userName,
+                    micEnabled = it.micEnabled,
+                    cameraEnabled = it.cameraEnabled,
+                    connectionState = it.connectionState,
+                )
+            }
         } ?: emptyFlow()
 
     /** Non-fatal errors worth surfacing (signaling drops, media failures). */
@@ -90,6 +132,7 @@ class MeshCall(context: Context) {
 
     fun toggleMic() = manager?.toggleMic()
     fun toggleCamera() = manager?.toggleCamera()
+    fun switchCamera() = manager?.switchCamera()
 
     // ---- Teardown ---------------------------------------------------------------
 
@@ -98,6 +141,7 @@ class MeshCall(context: Context) {
         manager?.leave()
         manager = null
         _stateFlow = flowOf(MeshCallState.IDLE)
+        _connectedFlow = flowOf(false)
     }
 
     /** Leave + release the instance. Call once from Activity/Fragment onDestroy. */
@@ -118,6 +162,7 @@ data class MeshRoomPeer(
     val userName: String,
     val micEnabled: Boolean,
     val cameraEnabled: Boolean,
+    val connectionState: String = "new",
 )
 
 /** High-level session status. */

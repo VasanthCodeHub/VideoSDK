@@ -8,6 +8,7 @@
 ### VC-001 — Camera Switch (front/back)
 - **Priority:** High
 - **Dependency:** none
+- **Status:** ✅ Implemented — `MeshCall.switchCamera()` → `CameraVideoCapturer.switchCamera`; FAB on the call screen. Capture restarts under the new facing; facing resets to front on leave (engine rebuilt per join).
 - **Acceptance criteria:**
   - ✓ Button toggles front/back camera during a call
   - ✓ No reconnect or call drop on switch
@@ -17,6 +18,7 @@
 ### VC-002 — Per-Peer Mute / Camera-Off Badges
 - **Priority:** High
 - **Dependency:** none (peer-state already relayed)
+- **Status:** ✅ Implemented (mock-verified) — tile chip shows `MIC OFF` / `CAM OFF`, red chip bg, avatar placeholder when camera off.
 - **Acceptance criteria:**
   - ✓ Remote tile shows mic-off / camera-off badge driven by `peer-state`
   - ✓ Badges update live; local state broadcasts on toggle
@@ -25,6 +27,7 @@
 ### VC-003 — Participant List
 - **Priority:** Medium
 - **Dependency:** VC-002
+- **Status:** ✅ Implemented — participants panel (FAB) lists names + live mic/camera state + count, excludes self.
 - **Acceptance criteria:**
   - ✓ Panel lists every participant (name + mic/camera state)
   - ✓ Updates on join/leave/toggle in real time
@@ -33,14 +36,16 @@
 ### VC-004 — Connection Status Indicator
 - **Priority:** Medium
 - **Dependency:** none
+- **Status:** ◐ Partial — per-peer ICE dots on tiles (`connected/completed/disconnected/failed`) + "Connecting to signaling server…" banner when the broker is unreachable. Peer disconnect toast not yet added.
 - **Acceptance criteria:**
   - ✓ Per-peer ICE state surfaced in UI (connecting/connected/disconnected/failed)
-  - ✓ Toast/banner on peer disconnect or reconnect
+  - ✗ Toast/banner on peer disconnect or reconnect
   - ✓ Broker unreachable shows distinct error (not silent)
 
 ### VC-005 — Call Timer
 - **Priority:** Low
 - **Dependency:** none
+- **Status:** ✅ Implemented — `hh:mm:ss`/`mm:ss` timer next to the room badge; starts with the call screen, stops on end/leave.
 - **Acceptance criteria:**
   - ✓ Timer starts when the call screen appears
   - ✓ Stops and resets on end call
@@ -73,6 +78,9 @@
 ### VC-009 — Landscape + Responsive Tile Grid
 - **Priority:** Medium
 - **Dependency:** none
+- **Status:** ✅ Implemented (mock-verified up to 9 peers) — non-overlapping grid
+  recomputed on rotation/resize; controls reposition via layout gravity; z-order
+  handled by plane design (remote underlay, chrome window plane, local PiP overlay).
 - **Acceptance criteria:**
   - ✓ Call screen usable in landscape (controls repositioned)
   - ✓ Remote tiles scale to available space (grid up to N)
@@ -89,6 +97,7 @@
 ### VC-011 — Copy Room Code During Call
 - **Priority:** Low
 - **Dependency:** none
+- **Status:** ✅ Implemented — tapping the room-code badge copies it and shows a toast.
 - **Acceptance criteria:**
   - ✓ Tapping the room-code badge copies it to clipboard
   - ✓ Toast confirmation

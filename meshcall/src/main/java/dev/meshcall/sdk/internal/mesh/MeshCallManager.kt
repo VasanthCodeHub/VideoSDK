@@ -40,6 +40,7 @@ internal class MeshCallManager(
     private val brokerUrl: String,
     private val userId: String,
     private val userName: String,
+    private val signalingFactory: ((roomId: String) -> SignalingClient)? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -68,6 +69,13 @@ internal class MeshCallManager(
     private val _mediaStreams = MutableSharedFlow<MediaEvent>(extraBufferCapacity = 32)
     val mediaEvents = _mediaStreams.asSharedFlow()
 
+    /** True while the signaling socket is connected (roster received). */
+    private val _signalingConnected = MutableStateFlow(false)
+    val signalingConnected = _signalingConnected.asStateFlow()
+
+    /** Latest ICE label per peer so tiles can show a connection dot. */
+    private val iceStateByPeer = HashMap<String, String>()
+
     private var signalingJob: Job? = null
     private var localVideoTrack: VideoTrack? = null
 
@@ -89,8 +97,10 @@ internal class MeshCallManager(
         eng.prepareLocalMedia()
         localVideoTrack = eng.localVideo
 
-        val s = SocketIOSignalingClient(brokerUrl, userId, userName)
+        val s: SignalingClient = signalingFactory?.invoke(roomId)
+            ?: SocketIOSignalingClient(brokerUrl, userId, userName)
         signaling = s
+        _signalingConnected.value = false
 
         _peers.value = emptyList()
         _roomState.value = RoomState.Active(roomId)
@@ -148,9 +158,11 @@ internal class MeshCallManager(
                 connections.remove(event.peerId)?.dispose()
                 remoteNames.remove(event.peerId)
                 remoteMedia.remove(event.peerId)
+                iceStateByPeer.remove(event.peerId)
                 publishPeers()
             }
             is SignalEvent.RoomSnapshot -> {
+                _signalingConnected.value = true
                 // Reconcile the roster: connect to any peers we missed, drop stale ones.
                 val ids = event.peers.map { it.id }
                 remoteNames.clear()
@@ -163,6 +175,7 @@ internal class MeshCallManager(
                         connections.remove(it)?.dispose()
                         remoteNames.remove(it)
                         remoteMedia.remove(it)
+                        iceStateByPeer.remove(it)
                     }
                 publishPeers()
             }
@@ -195,6 +208,7 @@ internal class MeshCallManager(
                 publishPeers()
             }
             is SignalEvent.SignalingDisconnected -> {
+                _signalingConnected.value = false
                 // Socket dropped; socket.io reconnects on its own and the reconnect
                 // path re-emits join-room which triggers a mid-loop roster snapshot.
             }
@@ -232,7 +246,10 @@ internal class MeshCallManager(
             onStreamRemoved = {
                 _mediaStreams.tryEmit(MediaEvent.RemoteStreamRemoved(it))
             },
-            onIceReport = { _, _ -> /* status node surfaced via peers only */ },
+            onIceReport = { pid, state ->
+                iceStateByPeer[pid] = state
+                publishPeers()
+            },
         )
         connections[peerId] = holder
 
@@ -269,6 +286,7 @@ internal class MeshCallManager(
                 userName = name,
                 micEnabled = mic,
                 cameraEnabled = cam,
+                connectionState = iceStateByPeer[id] ?: "new",
             )
         }
     }
@@ -279,6 +297,10 @@ internal class MeshCallManager(
 
     fun toggleCamera() {
         engine?.enableCamera(!(engine?.isCameraEnabled ?: true))
+    }
+
+    fun switchCamera() {
+        engine?.switchCamera()
     }
 
     fun setMic(enabled: Boolean) { engine?.enableMic(enabled) }
@@ -308,6 +330,8 @@ internal class MeshCallManager(
         connections.clear()
         remoteNames.clear()
         remoteMedia.clear()
+        iceStateByPeer.clear()
+        _signalingConnected.value = false
 
         engine?.dispose()
         engine = null
@@ -334,6 +358,7 @@ internal class MeshCallManager(
         val userName: String,
         val micEnabled: Boolean,
         val cameraEnabled: Boolean,
+        val connectionState: String = "new",
     )
 
     /** Media/track lifecycle event surfaced to the view layer. */

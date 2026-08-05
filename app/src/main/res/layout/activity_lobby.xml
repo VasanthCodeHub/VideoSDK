@@ -98,6 +98,13 @@
                     android:singleLine="true"/>
             </com.google.android.material.textfield.TextInputLayout>
 
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/sw_demo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/demo_mode"/>
+
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

@@ -354,6 +354,19 @@ class MeshWebRtcEngine(
         _connectionEvents.tryEmit(ConnectionEvent.LocalMediaStateChanged(micOn = micEnabled, camOn = enabled))
     }
 
+    /**
+     * Flip the active camera (front ⇄ back). Required capture restarts are handled by
+     * the underlying capturer; no renegotiation of the peer connections is needed.
+     */
+    fun switchCamera() {
+        val capturer = videoCapturer as? CameraVideoCapturer ?: return
+        try {
+            capturer.switchCamera(null)
+        } catch (e: Exception) {
+            onError("", "Failed to switch camera: ${e.message}")
+        }
+    }
+
     private fun onError(peerId: String, message: String) {
         _connectionEvents.tryEmit(ConnectionEvent.LocalError(peerId, message))
     }

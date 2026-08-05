@@ -19,4 +19,12 @@
     <string name="share_room_title">Share room code</string>
     <string name="room_share_message">Join my VideoCall with room code: %1$s</string>
     <string name="room_code_label">Room: %1$s</string>
+    <string name="desc_switch_cam">Switch camera</string>
+    <string name="desc_participants">Participants</string>
+    <string name="connecting_banner">Connecting to signaling server…</string>
+    <string name="participants_title">Participants (%1$d)</string>
+    <string name="demo_mode">Demo mode (no server)</string>
+    <string name="peer_state_mic_cam">%1$s · mic %2$s · camera %3$s</string>
+    <string name="state_on">on</string>
+    <string name="state_off">off</string>
 </resources>
