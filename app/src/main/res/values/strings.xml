@@ -10,4 +10,13 @@
     <string name="join_room">Join Room</string>
     <string name="server_hint">Signaling server</string>
     <string name="enter_room_id">Enter a Room ID to join</string>
+    <string name="your_room_id">Your Room ID</string>
+    <string name="share_room_hint">Share this code so others can join your call.</string>
+    <string name="start_call">Start Call</string>
+    <string name="copy">Copy</string>
+    <string name="share">Share</string>
+    <string name="room_copied">Room ID copied</string>
+    <string name="share_room_title">Share room code</string>
+    <string name="room_share_message">Join my VideoCall with room code: %1$s</string>
+    <string name="room_code_label">Room: %1$s</string>
 </resources>

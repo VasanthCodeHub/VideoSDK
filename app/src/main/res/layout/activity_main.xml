@@ -19,6 +19,19 @@
             android:layout_margin="16dp"/>
     </FrameLayout>
 
+    <!-- Room code (top-left, does not overlap the top-right preview) -->
+    <TextView
+        android:id="@+id/txtRoomCode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="40dp"
+        android:background="#66000000"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="4dp"
+        android:textColor="#CCFFFFFF"
+        android:textSize="13sp" />
+
     <LinearLayout
         android:id="@+id/controls"
         android:layout_width="wrap_content"
@@ -39,9 +52,9 @@
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btn_end"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:layout_margin="14dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_margin="10dp"
             android:src="@drawable/end"
             android:tint="@android:color/white"
             app:backgroundTint="#E53935"

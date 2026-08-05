@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -70,6 +71,8 @@ class MainActivity : AppCompatActivity() {
         val broker = intent.getStringExtra(BROKER_EXTRA) ?: DEFAULT_BROKER
         val room = intent.getStringExtra(ROOM_EXTRA) ?: DEFAULT_ROOM
         val name = intent.getStringExtra(NAME_EXTRA) ?: DEFAULT_NAME
+
+        findViewById<TextView>(R.id.txtRoomCode).text = getString(R.string.room_code_label, room)
 
         // Identity: without a real auth backend the SDK takes an opaque user id.
         LocalIdentityProvider.userId = "$name-${System.currentTimeMillis()}"

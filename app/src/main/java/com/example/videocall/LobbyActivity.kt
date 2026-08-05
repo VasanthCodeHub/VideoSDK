@@ -1,11 +1,17 @@
 package com.example.videocall
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
+import android.view.View
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import java.security.SecureRandom
 
@@ -28,7 +34,8 @@ class LobbyActivity : AppCompatActivity() {
         etBroker.setText(DEFAULT_BROKER)
 
         btnCreate.setOnClickListener {
-            startCall(generateRoomId(), etBroker.text.toString().trim())
+            val roomId = generateRoomId()
+            showRoomDialog(roomId, etBroker.text.toString().trim())
         }
         btnJoin.setOnClickListener {
             val roomId = etRoom.text.toString().trim().uppercase()
@@ -38,6 +45,40 @@ class LobbyActivity : AppCompatActivity() {
             }
             startCall(roomId, etBroker.text.toString().trim())
         }
+    }
+
+    private fun showRoomDialog(roomId: String, broker: String) {
+        val view = layoutInflater.inflate(R.layout.dialog_room_code, null)
+        view.findViewById<TextView>(R.id.room_code).text = roomId
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(view)
+            .create()
+
+        view.findViewById<View>(R.id.btn_copy).setOnClickListener {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText(ROOM_CLIP_LABEL, roomId))
+            dialog.dismiss()
+            Toast.makeText(this, R.string.room_copied, Toast.LENGTH_SHORT).show()
+        }
+        view.findViewById<View>(R.id.btn_share).setOnClickListener {
+            dialog.dismiss()
+            shareRoomId(roomId)
+        }
+        view.findViewById<View>(R.id.btn_start).setOnClickListener {
+            dialog.dismiss()
+            startCall(roomId, broker)
+        }
+
+        dialog.show()
+    }
+
+    private fun shareRoomId(roomId: String) {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, getString(R.string.room_share_message, roomId))
+        }
+        startActivity(Intent.createChooser(send, getString(R.string.share_room_title)))
     }
 
     private fun startCall(roomId: String, broker: String) {
@@ -60,6 +101,7 @@ class LobbyActivity : AppCompatActivity() {
         const val EXTRA_NAME = "name"
         const val DEFAULT_BROKER = "ws://10.0.2.2:3000"
         const val ROOM_ID_LENGTH = 6
+        const val ROOM_CLIP_LABEL = "videocall_room_id"
         val ROOM_ID_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
         val secureRandom = SecureRandom()
     }
