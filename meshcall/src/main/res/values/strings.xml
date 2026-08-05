@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="meshcall_notification_channel_name">Active call</string>
+    <string name="meshcall_notification_title">Active call</string>
+    <string name="meshcall_notification_text">Ongoing group video call</string>
+    <string name="meshcall_notification_ticker">Call in progress</string>
+
+    <string name="meshcall_status_disconnected">Disconnected</string>
+    <string name="meshcall_status_connecting">Connecting…</string>
+    <string name="meshcall_status_reconnecting">Reconnecting…</string>
+    <string name="meshcall_status_connected">Connected</string>
+    <string name="meshcall_status_failed">Failed</string>
+    <string name="meshcall_status_muted">Muted</string>
+</resources>

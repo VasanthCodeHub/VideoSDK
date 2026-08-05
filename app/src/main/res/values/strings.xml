@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">VideoCall</string>
+    <string name="desc_mic">Toggle microphone</string>
+    <string name="desc_camera">Toggle camera</string>
+    <string name="desc_end">End call</string>
+    <string name="lobby_subtitle">Create a room to start a call, or join one with a shared Room ID.</string>
+    <string name="create_room">Create Room</string>
+    <string name="or_join_with_code">or join with a code</string>
+    <string name="room_id_hint">Room ID</string>
+    <string name="join_room">Join Room</string>
+    <string name="server_hint">Signaling server</string>
+    <string name="enter_room_id">Enter a Room ID to join</string>
+</resources>

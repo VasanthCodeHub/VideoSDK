@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Library-level network security config. The SDK itself cannot set the host app's
+  network_security_config (the element lives in the app manifest), so this file is
+  documentation + a default the sample app uses. The SDK resolves signaling websocket
+  URLs with cleartext-traffic="true" anyway, matching the socket.io client reconnect
+  attempts to a local (non-HTTPS) broker during development.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

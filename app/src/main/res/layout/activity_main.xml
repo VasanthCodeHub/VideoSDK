@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000">
+
+    <!-- Remote Video -->
+    <FrameLayout
+        android:id="@+id/call_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <dev.meshcall.sdk.ui.MeshVideoRenderer
+            android:id="@+id/local_preview"
+            android:layout_width="110dp"
+            android:layout_height="160dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="16dp"/>
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/controls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_mic"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_margin="10dp"
+            android:src="@drawable/mic"
+            android:tint="@android:color/white"
+            app:borderWidth="0dp"/>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_end"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_margin="14dp"
+            android:src="@drawable/end"
+            android:tint="@android:color/white"
+            app:backgroundTint="#E53935"
+            app:borderWidth="0dp"
+            app:maxImageSize="28dp" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_camera"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_margin="10dp"
+            android:src="@drawable/cam"
+            android:tint="@android:color/white"
+            app:borderWidth="0dp"/>
+
+    </LinearLayout>
+
+</FrameLayout>

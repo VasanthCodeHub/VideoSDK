@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="meshcall_black">#FF000000</color>
+    <color name="meshcall_tile_background">#FF1B1B1B</color>
+    <color name="meshcall_tile_placeholder">#FF2E2E2E</color>
+    <color name="meshcall_mute_badge">#B3000000</color>
+    <color name="meshcall_white">#FFFFFFFF</color>
+    <color name="meshcall_status_red">#FFFF5252</color>
+</resources>
