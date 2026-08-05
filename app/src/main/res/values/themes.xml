@@ -76,6 +76,12 @@
         <item name="cornerSize">32dp</item>
     </style>
 
+    <!-- Rounded-pill FAB used for the end-call button in the floating control bar -->
+    <style name="ShapeAppearance.VideoCall.EndPill" parent="ShapeAppearance.Material3.LargeComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">28dp</item>
+    </style>
+
     <style name="ThemeOverlay.VideoCall.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="colorSurface">@color/surface_container</item>
         <item name="colorOnSurface">@color/on_surface</item>

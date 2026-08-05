@@ -6,6 +6,13 @@
     <string name="desc_end">End call</string>
     <string name="desc_switch_cam">Switch camera</string>
     <string name="desc_participants">Participants</string>
+    <string name="desc_share">Share screen</string>
+    <string name="desc_more">More options</string>
+    <string name="desc_secured">Encrypted call</string>
+    <string name="desc_you_pin">You</string>
+    <string name="you_label">You</string>
+    <string name="share_coming_soon">Screen sharing is coming soon</string>
+    <string name="more_coming_soon">More options are coming soon</string>
 
     <string name="lobby_subtitle">Create a room to start a call, or join one with a shared Room ID.</string>
     <string name="create_room">Create Room</string>

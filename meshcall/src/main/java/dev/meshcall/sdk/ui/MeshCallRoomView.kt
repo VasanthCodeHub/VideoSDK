@@ -1,12 +1,16 @@
 package dev.meshcall.sdk.ui
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import dev.meshcall.sdk.R
@@ -31,12 +35,13 @@ import kotlin.math.sqrt
  * Binds a [MeshCall] session to a responsive tile grid inside [rendererContainer].
  *
  * Layout model:
- *  - The local preview is the first [MeshVideoRenderer] child of the container (the
- *    host places it as a PiP). It keeps `zOrderMediaOverlay` so it floats above the grid.
+ *  - The local preview is a [MeshVideoRenderer] child of the container (the host places
+ *    it as a PiP). All renderers share the underlay plane; the preview's wrapper is kept
+ *    as the last child so its surface always floats above the grid.
  *  - Every remote participant gets a tile: a [FrameLayout] cell holding the video
- *    surface (underlay plane), a placeholder (shown while the peer has no video), and a
- *    chrome bar (name + mic/camera badges + connection dot) that always draws above the
- *    video.
+ *    surface (underlay plane), a placeholder + bottom gradient (shown while the peer has
+ *    no video), and a chrome bar (name chip + mic/camera-off badges + connection dot)
+ *    that always draws above the video.
  *  - Cells are recomputed whenever the container resizes or the roster changes, for any
  *    participant count (exercised with 8+ peers in offline demo mode).
  *
@@ -181,9 +186,10 @@ class MeshCallRoomView(
     private fun initRenderer(renderer: MeshVideoRenderer, egl: EglBase.Context) {
         if (initialized.add(renderer)) {
             renderer.setEnableHardwareScaler(true)
-            // Local PiP overlays the grid; remote surfaces sit in the underlay plane so
-            // tile chrome (window plane) always draws above the video.
-            renderer.setZOrderMediaOverlay(renderer === localPreview())
+            // All surfaces live in the underlay plane so tile chrome (window plane)
+            // always draws above the video. The local preview is kept as the last child
+            // of the container, which puts its surface above every grid tile.
+            renderer.setZOrderMediaOverlay(false)
             renderer.init(egl, null)
         }
     }
@@ -219,7 +225,7 @@ class MeshCallRoomView(
         val egc = eglContext ?: error("bind() must run before peers arrive")
 
         val frame = FrameLayout(context)
-        frame.setBackgroundColor(Color.rgb(24, 27, 33))
+        frame.setBackgroundResource(R.drawable.bg_tile_frame)
 
         val renderer = MeshVideoRenderer(context)
         frame.addView(
@@ -231,6 +237,8 @@ class MeshCallRoomView(
         )
         initRenderer(renderer, egc)
         renderer.setMirror(false)
+        renderer.outlineProvider = ViewOutlineProvider.BACKGROUND
+        renderer.clipToOutline = true
 
         val placeholder = buildPlaceholder(name, peerId)
         placeholder.visibility = View.GONE
@@ -242,12 +250,45 @@ class MeshCallRoomView(
             ),
         )
 
+        // Subtle bottom fade that keeps the name chip readable over any video.
+        val overlay = View(context)
+        overlay.setBackgroundResource(R.drawable.bg_tile_overlay)
+        frame.addView(
+            overlay,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+
         val chip = TextView(context)
         chip.setTextColor(Color.WHITE)
         chip.textSize = 12f
         chip.setSingleLine(true)
+        chip.ellipsize = TextUtils.TruncateAt.END
+        chip.maxWidth = dp(110)
         chip.setBackgroundResource(R.drawable.bg_tile_chip)
-        chip.setPadding(dp(6), dp(3), dp(6), dp(3))
+        chip.setPadding(dp(8), dp(4), dp(8), dp(4))
+
+        val micBadge = ImageView(context)
+        micBadge.setImageResource(R.drawable.ic_mic_off)
+        micBadge.setBackgroundResource(R.drawable.bg_tile_badge)
+        micBadge.imageTintList = ColorStateList.valueOf(0xFFEF4444.toInt())
+        micBadge.setPadding(dp(5), dp(5), dp(5), dp(5))
+        micBadge.visibility = View.GONE
+
+        val camBadge = ImageView(context)
+        camBadge.setImageResource(R.drawable.ic_videocam_off)
+        camBadge.setBackgroundResource(R.drawable.bg_tile_badge)
+        camBadge.imageTintList = ColorStateList.valueOf(0xFFEF4444.toInt())
+        camBadge.setPadding(dp(5), dp(5), dp(5), dp(5))
+        camBadge.visibility = View.GONE
+
+        val badges = LinearLayout(context)
+        badges.orientation = LinearLayout.HORIZONTAL
+        badges.gravity = Gravity.END
+        badges.addView(micBadge, LinearLayout.LayoutParams(dp(24), dp(24)).also { it.marginEnd = dp(4) })
+        badges.addView(camBadge, LinearLayout.LayoutParams(dp(24), dp(24)))
 
         val dot = View(context)
         dot.setBackgroundResource(R.drawable.dot_connecting)
@@ -255,23 +296,40 @@ class MeshCallRoomView(
         val chrome = FrameLayout(context)
         chrome.addView(
             dot,
-            FrameLayout.LayoutParams(dp(8), dp(8), Gravity.END).also { it.topMargin = dp(4) },
+            FrameLayout.LayoutParams(dp(8), dp(8), Gravity.END).also {
+                it.topMargin = dp(8)
+                it.marginEnd = dp(8)
+            },
         )
         chrome.addView(
             chip,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-            ),
+                Gravity.BOTTOM or Gravity.START,
+            ).apply {
+                bottomMargin = dp(6)
+                marginStart = dp(8)
+            },
+        )
+        chrome.addView(
+            badges,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM or Gravity.END,
+            ).apply {
+                bottomMargin = dp(6)
+                marginEnd = dp(8)
+            },
         )
 
         frame.addView(
             chrome,
             FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM or Gravity.START,
-            ).apply { bottomMargin = dp(6) },
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
         )
 
         rendererContainer.addView(
@@ -282,7 +340,7 @@ class MeshCallRoomView(
             ),
         )
 
-        val tile = Tile(peerId, name, frame, renderer, placeholder, dot, chip)
+        val tile = Tile(peerId, name, frame, renderer, placeholder, overlay, dot, chip, micBadge, camBadge)
         tiles[peerId] = tile
         relayout()
         return tile
@@ -291,7 +349,7 @@ class MeshCallRoomView(
     /** Big-tile visual shown while the peer has no video or their camera is off. */
     private fun buildPlaceholder(name: String, peerId: String): View {
         val layer = FrameLayout(context)
-        layer.setBackgroundColor(Color.rgb(24, 27, 33))
+        layer.setBackgroundColor(0xFF18181B.toInt())
 
         val inner = LinearLayout(context)
         inner.orientation = LinearLayout.VERTICAL
@@ -333,15 +391,11 @@ class MeshCallRoomView(
     }
 
     private fun applyChrome(tile: Tile, peer: MeshRoomPeer) {
-        val badges = buildString {
-            append(peer.userName)
-            if (!peer.micEnabled) append("  MIC OFF")
-            if (!peer.cameraEnabled) append("  CAM OFF")
-        }
-        tile.chip.text = badges
-        tile.chip.setBackgroundResource(
-            if (peer.micEnabled && peer.cameraEnabled) R.drawable.bg_tile_chip else R.drawable.bg_tile_chip_muted,
-        )
+        tile.chip.text = peer.userName
+        tile.chip.setBackgroundResource(R.drawable.bg_tile_chip)
+
+        tile.micBadge.visibility = if (peer.micEnabled) View.GONE else View.VISIBLE
+        tile.camBadge.visibility = if (peer.cameraEnabled) View.GONE else View.VISIBLE
 
         tile.dot.setBackgroundResource(
             when (peer.connectionState) {
@@ -387,7 +441,7 @@ class MeshCallRoomView(
         val h = rendererContainer.height
         if (w == 0 || h == 0 || tiles.isEmpty()) return
 
-        val gap = dp(4)
+        val gap = dp(10)
         val count = tiles.size
         val cols = ceil(sqrt(count.toDouble())).toInt().coerceIn(1, 3)
         val rows = ceil(count.toDouble() / cols).toInt()
@@ -406,15 +460,32 @@ class MeshCallRoomView(
             lp.bottomMargin = 0
             tile.frame.layoutParams = lp
         }
+
+        // All renderers share the underlay plane, where sibling order decides who draws
+        // on top. Keeping the local preview last floats it above every grid tile while
+        // the tile chrome (window plane) still draws above it.
+        (localPreview()?.parent as? View)?.let(rendererContainer::bringChildToFront)
     }
 
     private fun localPreview(): MeshVideoRenderer? = allChildren()
         .filterIsInstance<MeshVideoRenderer>()
         .firstOrNull()
 
-    private fun allChildren(): Sequence<android.view.View> =
-        (0 until rendererContainer.childCount).asSequence()
-            .map { rendererContainer.getChildAt(it) }
+    private fun allChildren(): Sequence<android.view.View> = sequence {
+        val queue = ArrayDeque<android.view.View>()
+        for (i in 0 until rendererContainer.childCount) {
+            queue.addLast(rendererContainer.getChildAt(i))
+        }
+        while (queue.isNotEmpty()) {
+            val current = queue.removeFirst()
+            yield(current)
+            if (current is ViewGroup) {
+                for (i in 0 until current.childCount) {
+                    queue.addLast(current.getChildAt(i))
+                }
+            }
+        }
+    }
 
     private fun initialsFor(name: String): String =
         name.trim()
@@ -438,8 +509,11 @@ class MeshCallRoomView(
         val frame: FrameLayout,
         val renderer: MeshVideoRenderer,
         val placeholder: View,
+        val overlay: View,
         val dot: View,
         val chip: TextView,
+        val micBadge: ImageView,
+        val camBadge: ImageView,
     )
 
     private companion object {

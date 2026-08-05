@@ -1,14 +1,18 @@
 package com.example.videocall
 
 import android.Manifest
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -66,27 +70,42 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<FloatingActionButton>(R.id.btn_mic).setOnClickListener {
             micOn = !micOn
-            findViewById<FloatingActionButton>(R.id.btn_mic).backgroundTintList =
-                if (micOn) null else android.content.res.ColorStateList.valueOf(0xFFE53935.toInt())
+            val btn = findViewById<FloatingActionButton>(R.id.btn_mic)
+            btn.setImageResource(if (micOn) R.drawable.ic_mic else R.drawable.ic_mic_off)
+            btn.backgroundTintList = if (micOn) null else ColorStateList.valueOf(0xFFDC2626.toInt())
             call?.toggleMic()
         }
         findViewById<FloatingActionButton>(R.id.btn_camera).setOnClickListener {
             camOn = !camOn
-            findViewById<FloatingActionButton>(R.id.btn_camera).backgroundTintList =
-                if (camOn) null else android.content.res.ColorStateList.valueOf(0xFFE53935.toInt())
+            val btn = findViewById<FloatingActionButton>(R.id.btn_camera)
+            btn.setImageResource(if (camOn) R.drawable.ic_videocam_on else R.drawable.ic_videocam_off)
+            btn.backgroundTintList = if (camOn) null else ColorStateList.valueOf(0xFFDC2626.toInt())
             call?.toggleCamera()
         }
-        findViewById<FloatingActionButton>(R.id.btn_switch_cam).setOnClickListener { call?.switchCamera() }
+        findViewById<FloatingActionButton>(R.id.btn_share).setOnClickListener {
+            Toast.makeText(this, R.string.share_coming_soon, Toast.LENGTH_SHORT).show()
+        }
+        findViewById<FloatingActionButton>(R.id.btn_more).setOnClickListener {
+            Toast.makeText(this, R.string.more_coming_soon, Toast.LENGTH_SHORT).show()
+        }
+        findViewById<ImageButton>(R.id.btn_switch_cam).setOnClickListener { call?.switchCamera() }
         findViewById<FloatingActionButton>(R.id.btn_end).setOnClickListener {
             roomView?.release()
             call?.leave()
             finish()
         }
-        findViewById<FloatingActionButton>(R.id.btn_participants).setOnClickListener {
+        findViewById<ImageButton>(R.id.btn_participants).setOnClickListener {
             toggleParticipants()
         }
         findViewById<TextView>(R.id.txtRoomCode).setOnClickListener {
             copyRoomCode()
+        }
+
+        ObjectAnimator.ofFloat(findViewById<View>(R.id.dot_pulse), View.ALPHA, 0.35f, 1f).apply {
+            duration = 900L
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            start()
         }
 
         val missing = permissions.filter {
@@ -102,7 +121,7 @@ class MainActivity : AppCompatActivity() {
         val name = intent.getStringExtra(NAME_EXTRA) ?: DEFAULT_NAME
         val simulatedPeers = intent.getIntExtra(EXTRA_PEERS, DEFAULT_DEMO_PEERS)
 
-        findViewById<TextView>(R.id.txtRoomCode).text = getString(R.string.room_code_label, room)
+        findViewById<TextView>(R.id.txtRoomCode).text = room
 
         // Identity: without a real auth backend the SDK takes an opaque user id.
         LocalIdentityProvider.userId = "$name-${System.currentTimeMillis()}"

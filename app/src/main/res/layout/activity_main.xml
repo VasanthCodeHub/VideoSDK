@@ -5,52 +5,143 @@
     android:layout_height="match_parent"
     android:background="#000">
 
-    <!-- Remote Video grid (populated by MeshCallRoomView) -->
+    <!-- Remote video grid (populated by MeshCallRoomView) + floating local preview -->
     <FrameLayout
         android:id="@+id/call_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <dev.meshcall.sdk.ui.MeshVideoRenderer
-            android:id="@+id/local_preview"
+        <FrameLayout
+            android:id="@+id/local_pip"
             android:layout_width="110dp"
             android:layout_height="160dp"
             android:layout_gravity="top|end"
-            android:layout_margin="16dp"/>
+            android:layout_margin="16dp"
+            android:background="@drawable/bg_pip_tile"
+            android:clipToOutline="true">
+
+            <dev.meshcall.sdk.ui.MeshVideoRenderer
+                android:id="@+id/local_preview"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_pip_tile"
+                android:clipToOutline="true"
+                android:outlineProvider="background" />
+
+            <TextView
+                android:id="@+id/lbl_you"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="6dp"
+                android:background="@drawable/bg_chip_glass"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:text="@string/you_label"
+                android:textColor="#FFFFFFFF"
+                android:textSize="12sp" />
+
+            <FrameLayout
+                android:id="@+id/pin_badge"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="bottom|end"
+                android:layout_margin="6dp"
+                android:background="@drawable/bg_pin_glass">
+
+                <ImageView
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@string/desc_you_pin"
+                    android:src="@drawable/ic_push_pin"
+                    app:tint="#FFFFFFFF" />
+            </FrameLayout>
+        </FrameLayout>
     </FrameLayout>
 
-    <!-- Call chrome (top strip, does not overlap the top-right preview) -->
+    <!-- Header: room title, live timer, group + flip-camera actions -->
     <LinearLayout
         android:id="@+id/top_chrome"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="12dp"
-        android:layout_marginEnd="132dp"
-        android:gravity="center_vertical"
+        android:background="#E6000000"
         android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/txtRoomCode"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#66000000"
-            android:paddingHorizontal="10dp"
-            android:paddingVertical="4dp"
-            android:textColor="#CCFFFFFF"
-            android:textSize="13sp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="10dp">
 
-        <TextView
-            android:id="@+id/txtCallTimer"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:background="#66000000"
-            android:paddingHorizontal="10dp"
-            android:paddingVertical="2dp"
-            android:textColor="#CCFFFFFF"
-            android:textSize="13sp"
-            android:visibility="gone" />
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="@string/desc_secured"
+                android:src="@drawable/ic_shield_lock"
+                app:tint="@color/on_surface" />
+
+            <TextView
+                android:id="@+id/txtRoomCode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/on_surface"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <View
+                android:id="@+id/dot_pulse"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:layout_marginStart="12dp"
+                android:background="@drawable/bg_dot_pulse" />
+
+            <TextView
+                android:id="@+id/txtCallTimer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:textColor="@color/on_surface"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/btn_participants"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_icon_btn"
+                android:contentDescription="@string/desc_participants"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_groups"
+                app:tint="@color/on_surface" />
+
+            <ImageButton
+                android:id="@+id/btn_switch_cam"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_icon_btn"
+                android:contentDescription="@string/desc_switch_cam"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_flip_camera"
+                app:tint="@color/on_surface" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#26262B" />
     </LinearLayout>
 
     <!-- Signaling connection banner -->
@@ -59,8 +150,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="12dp"
-        android:background="#C62828"
+        android:layout_marginTop="64dp"
+        android:background="@drawable/bg_banner_red"
         android:paddingHorizontal="14dp"
         android:paddingVertical="6dp"
         android:text="@string/connecting_banner"
@@ -74,9 +165,9 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|end"
-        android:layout_marginTop="12dp"
-        android:layout_marginEnd="140dp"
-        android:background="#E6000000"
+        android:layout_marginTop="64dp"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/bg_panel"
         android:orientation="vertical"
         android:padding="12dp"
         android:visibility="gone">
@@ -97,66 +188,88 @@
             android:orientation="vertical" />
     </LinearLayout>
 
+    <!-- Floating glass control bar -->
     <LinearLayout
         android:id="@+id/controls"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="32dp"
+        android:layout_marginBottom="20dp"
+        android:background="@drawable/bg_glass_bar"
+        android:elevation="12dp"
         android:gravity="center"
-        android:orientation="horizontal">
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/btn_participants"
-            android:layout_width="52dp"
-            android:layout_height="52dp"
-            android:layout_margin="8dp"
-            android:contentDescription="@string/desc_participants"
-            android:src="@android:drawable/ic_menu_agenda"
-            android:tint="@android:color/white"
-            app:borderWidth="0dp"/>
+        android:orientation="horizontal"
+        android:padding="8dp">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btn_mic"
             android:layout_width="56dp"
             android:layout_height="56dp"
-            android:layout_margin="10dp"
             android:contentDescription="@string/desc_mic"
-            android:src="@drawable/mic"
-            android:tint="@android:color/white"
-            app:borderWidth="0dp"/>
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/btn_end"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_margin="10dp"
-            android:contentDescription="@string/desc_end"
-            android:src="@drawable/end"
-            android:tint="@android:color/white"
-            app:backgroundTint="#E53935"
+            android:src="@drawable/ic_mic"
+            app:tint="@android:color/white"
+            app:backgroundTint="#1AFFFFFF"
             app:borderWidth="0dp"
-            app:maxImageSize="28dp" />
+            app:elevation="0dp"
+            app:maxImageSize="24dp"
+            app:pressedTranslationZ="0dp" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btn_camera"
             android:layout_width="56dp"
             android:layout_height="56dp"
-            android:layout_margin="10dp"
+            android:layout_marginStart="10dp"
             android:contentDescription="@string/desc_camera"
-            android:src="@drawable/cam"
-            android:tint="@android:color/white"
-            app:borderWidth="0dp"/>
+            android:src="@drawable/ic_videocam_on"
+            app:tint="@android:color/white"
+            app:backgroundTint="#1AFFFFFF"
+            app:borderWidth="0dp"
+            app:elevation="0dp"
+            app:maxImageSize="24dp"
+            app:pressedTranslationZ="0dp" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/btn_switch_cam"
-            android:layout_width="52dp"
-            android:layout_height="52dp"
-            android:layout_margin="8dp"
-            android:contentDescription="@string/desc_switch_cam"
-            android:src="@android:drawable/ic_menu_camera"
-            android:tint="@android:color/white"
-            app:borderWidth="0dp"/>
+            android:id="@+id/btn_share"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="10dp"
+            android:contentDescription="@string/desc_share"
+            android:src="@drawable/ic_present_to_all"
+            app:tint="@android:color/white"
+            app:backgroundTint="#1AFFFFFF"
+            app:borderWidth="0dp"
+            app:elevation="0dp"
+            app:maxImageSize="24dp"
+            app:pressedTranslationZ="0dp" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_more"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="10dp"
+            android:contentDescription="@string/desc_more"
+            android:src="@drawable/ic_more_horiz"
+            app:tint="@android:color/white"
+            app:backgroundTint="#1AFFFFFF"
+            app:borderWidth="0dp"
+            app:elevation="0dp"
+            app:maxImageSize="24dp"
+            app:pressedTranslationZ="0dp" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_end"
+            android:layout_width="72dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="12dp"
+            android:contentDescription="@string/desc_end"
+            android:src="@drawable/ic_call_end"
+            app:tint="@android:color/white"
+            app:backgroundTint="#DC2626"
+            app:borderWidth="0dp"
+            app:elevation="0dp"
+            app:maxImageSize="24dp"
+            app:pressedTranslationZ="0dp"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.VideoCall.EndPill" />
     </LinearLayout>
 
 </FrameLayout>
