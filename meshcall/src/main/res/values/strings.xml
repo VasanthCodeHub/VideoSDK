@@ -14,9 +14,8 @@
     <!-- Meeting screen -->
     <string name="meshcall_connecting_banner">Connecting to signaling server…</string>
     <string name="meshcall_participants_title">Participants (%1$d)</string>
-    <string name="meshcall_participant_state">%1$s · mic %2$s · camera %3$s</string>
-    <string name="meshcall_state_on">on</string>
-    <string name="meshcall_state_off">off</string>
+    <string name="meshcall_desc_mute_participant">Mute %1$s</string>
+    <string name="meshcall_desc_participant_muted">%1$s is muted</string>
     <string name="meshcall_meeting_code_copied">Meeting code copied</string>
     <string name="meshcall_meeting_code_clip_label">meeting_code</string>
 

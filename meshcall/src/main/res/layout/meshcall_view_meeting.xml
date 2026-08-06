@@ -129,33 +129,35 @@
 
         <LinearLayout
             android:id="@+id/meshcall_participants_panel"
-            android:layout_width="wrap_content"
+            android:layout_width="280dp"
             android:layout_height="wrap_content"
             android:layout_gravity="top|end"
             android:layout_marginTop="12dp"
             android:layout_marginEnd="16dp"
             android:background="@drawable/meshcall_bg_panel"
-            android:maxHeight="260dp"
+            android:maxHeight="320dp"
             android:orientation="vertical"
-            android:padding="12dp"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="12dp"
             android:visibility="gone">
 
             <TextView
                 android:id="@+id/meshcall_participants_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
                 android:textColor="@color/meshcall_white"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
             <ScrollView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp">
+                android:scrollbars="none">
 
                 <LinearLayout
                     android:id="@+id/meshcall_participants_list"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical" />
             </ScrollView>

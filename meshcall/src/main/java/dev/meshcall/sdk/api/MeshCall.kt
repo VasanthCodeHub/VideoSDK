@@ -128,6 +128,15 @@ class MeshCall(context: Context) {
     fun setMic(enabled: Boolean) = meshManager?.setMic(enabled)
     fun setCamera(enabled: Boolean) = meshManager?.setCamera(enabled)
 
+    /**
+     * Ask [participantId] to mute their mic; honored automatically on their device.
+     *
+     * Client-side only today — the signaling broker (`VideoSDKServer/server`, a separate
+     * repo) does not yet relay `mute-request`, so this is a no-op end to end until that
+     * server-side handler ships.
+     */
+    fun requestMute(participantId: String) = meshManager?.requestMute(participantId)
+
     // ---- Teardown ---------------------------------------------------------------
 
     /** Leave the current meeting and free resources. Safe to call repeatedly. */

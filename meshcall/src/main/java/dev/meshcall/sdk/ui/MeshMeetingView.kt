@@ -4,10 +4,13 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Typeface
 import android.os.SystemClock
 import android.util.AttributeSet
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -77,6 +80,9 @@ class MeshMeetingView @JvmOverloads constructor(
     private val leaveButton: ImageButton
     private val participantsButton: ImageButton
     private val switchCameraButton: ImageButton
+
+    /** One built row per roster slot; kept parallel to [MeshCall.participants] by index. */
+    private val participantRows = mutableListOf<ParticipantRow>()
 
     private var grid: MeshParticipantGrid? = null
     private var call: MeshCall? = null
@@ -212,6 +218,7 @@ class MeshMeetingView @JvmOverloads constructor(
         call = null
         setControlsEnabled(false)
         participantsList.removeAllViews()
+        participantRows.clear()
         participantsPanel.visibility = GONE
     }
 
@@ -270,29 +277,104 @@ class MeshMeetingView @JvmOverloads constructor(
         participantsTitle.text =
             context.getString(R.string.meshcall_participants_title, roster.size)
 
-        if (participantsList.childCount != roster.size) {
+        if (participantRows.size != roster.size) {
             participantsList.removeAllViews()
-            repeat(roster.size) { participantsList.addView(buildParticipantRow()) }
+            participantRows.clear()
+            repeat(roster.size) { index ->
+                val row = buildParticipantRow(addTopSpacing = index > 0)
+                participantsList.addView(row.root)
+                participantRows.add(row)
+            }
         }
         roster.forEachIndexed { index, participant ->
-            (participantsList.getChildAt(index) as? TextView)?.text = context.getString(
-                R.string.meshcall_participant_state,
-                participant.userName,
-                stateLabel(participant.micEnabled),
-                stateLabel(participant.cameraEnabled),
-            )
+            val row = participantRows[index]
+            row.avatarLabel.text = initialOf(participant.userName)
+            row.nameLabel.text = participant.userName
+            applyRowMicButton(row.micButton, participant)
         }
     }
 
-    private fun buildParticipantRow() = TextView(context).apply {
-        setTextColor(color(R.color.meshcall_on_chrome))
-        textSize = 13f
-        setPadding(0, 0, 0, dp(4))
+    /** One row: initial avatar, name, and a mic icon that mutes that participant on tap. */
+    private class ParticipantRow(
+        val root: LinearLayout,
+        val avatarLabel: TextView,
+        val nameLabel: TextView,
+        val micButton: ImageButton,
+    )
+
+    private fun buildParticipantRow(addTopSpacing: Boolean): ParticipantRow {
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = if (addTopSpacing) dp(10) else 0 }
+            setPadding(0, dp(4), 0, dp(4))
+        }
+
+        val avatarSize = dp(32)
+        val avatarLabel = TextView(context).apply {
+            layoutParams = LinearLayout.LayoutParams(avatarSize, avatarSize)
+            background = ContextCompat.getDrawable(context, R.drawable.meshcall_bg_avatar)
+            gravity = Gravity.CENTER
+            setTextColor(color(R.color.meshcall_white))
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+
+        val nameLabel = TextView(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                1f,
+            ).apply { marginStart = dp(10); marginEnd = dp(8) }
+            setTextColor(color(R.color.meshcall_on_chrome))
+            textSize = 14f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+
+        val micButtonSize = dp(30)
+        val micButton = ImageButton(context).apply {
+            layoutParams = LinearLayout.LayoutParams(micButtonSize, micButtonSize)
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            imageTintList = ColorStateList.valueOf(color(R.color.meshcall_white))
+        }
+
+        root.addView(avatarLabel)
+        root.addView(nameLabel)
+        root.addView(micButton)
+        return ParticipantRow(root, avatarLabel, nameLabel, micButton)
     }
 
-    private fun stateLabel(enabled: Boolean) = context.getString(
-        if (enabled) R.string.meshcall_state_on else R.string.meshcall_state_off,
-    )
+    /**
+     * Mic icon mirrors the local mic button's on/off styling for visual consistency.
+     * Unmuted: tap sends a mute request. Already muted: disabled — this SDK has no way to
+     * force someone to unmute, only to mute them.
+     */
+    private fun applyRowMicButton(button: ImageButton, participant: MeshParticipant) {
+        val micOn = participant.micEnabled
+        button.setImageResource(
+            if (micOn) R.drawable.meshcall_ic_mic else R.drawable.ic_mic_off,
+        )
+        button.setBackgroundResource(
+            if (micOn) R.drawable.meshcall_bg_control else R.drawable.meshcall_bg_control_danger,
+        )
+        button.isEnabled = micOn
+        button.alpha = if (micOn) 1f else 0.5f
+        button.contentDescription = if (micOn) {
+            context.getString(R.string.meshcall_desc_mute_participant, participant.userName)
+        } else {
+            context.getString(R.string.meshcall_desc_participant_muted, participant.userName)
+        }
+        button.setOnClickListener {
+            if (participant.micEnabled) call?.requestMute(participant.id)
+        }
+    }
+
+    private fun initialOf(name: String) = name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
 
     private fun copyMeetingCode() {
         val code = meetingCodeLabel.text?.toString().orEmpty()

@@ -233,7 +233,7 @@ class MeshParticipantGrid(
     private fun applyLocalChrome() {
         val tile = tiles[LOCAL_PEER_ID] ?: return
         tile.chip.text = context.getString(R.string.meshcall_you)
-        tile.micBadge.visibility = visibleIf(!localMicOn)
+        applyMicIndicator(tile.micBadge, localMicOn)
         tile.camBadge.visibility = visibleIf(!localCamOn)
         tile.placeholder.visibility = visibleIf(!localCamOn)
         tile.dot.setBackgroundResource(R.drawable.dot_connected)
@@ -316,14 +316,12 @@ class MeshParticipantGrid(
             setPadding(dp(8), dp(4), dp(8), dp(4))
             text = name
         }
-        val micBadge = buildBadge(R.drawable.ic_mic_off)
-        val camBadge = buildBadge(R.drawable.ic_videocam_off)
-        val badges = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END
-            addView(micBadge, LinearLayout.LayoutParams(dp(24), dp(24)).also { it.marginEnd = dp(4) })
-            addView(camBadge, LinearLayout.LayoutParams(dp(24), dp(24)))
+        // Persistent state icon (not a hide/show badge): always shows the current mic
+        // state, top-right, mirroring the participants popup's mic icon.
+        val micBadge = ImageView(context).apply {
+            setPadding(dp(5), dp(5), dp(5), dp(5))
         }
+        val camBadge = buildBadge(R.drawable.ic_videocam_off)
         val dot = View(context).apply {
             setBackgroundResource(if (isLocal) R.drawable.dot_connected else R.drawable.dot_connecting)
         }
@@ -365,24 +363,34 @@ class MeshParticipantGrid(
                 },
             )
             addView(
-                badges,
+                camBadge,
                 FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    dp(24),
+                    dp(24),
                     Gravity.BOTTOM or Gravity.END,
                 ).also {
                     it.bottomMargin = dp(6)
                     it.marginEnd = dp(8)
                 },
             )
+            // Top-right: persistent mic state, matching the participants popup.
+            addView(
+                micBadge,
+                FrameLayout.LayoutParams(dp(28), dp(28), Gravity.TOP or Gravity.END).also {
+                    it.topMargin = dp(8)
+                    it.marginEnd = dp(8)
+                },
+            )
         }
 
         frame.addView(ring, matchParent())
+        // Top-left, stacked under the connection dot so it never collides with the mic
+        // icon that now owns the top-right corner.
         frame.addView(
             pinBadge,
-            FrameLayout.LayoutParams(dp(32), dp(32), Gravity.TOP or Gravity.END).also {
-                it.topMargin = dp(8)
-                it.marginEnd = dp(8)
+            FrameLayout.LayoutParams(dp(28), dp(28), Gravity.TOP or Gravity.START).also {
+                it.topMargin = dp(20)
+                it.marginStart = dp(8)
             },
         )
         frame.addView(chrome, matchParent())
@@ -391,6 +399,19 @@ class MeshParticipantGrid(
 
         gridContainer.addView(frame, matchParent())
         return Tile(peerId, name, frame, renderer, placeholder, dot, ring, pinBadge, chip, micBadge, camBadge)
+    }
+
+    /**
+     * Mic icon, top-right of every tile: glass background + white icon when unmuted,
+     * translucent-red background + red icon when muted — same on/off language as the
+     * local control bar and the participants popup.
+     */
+    private fun applyMicIndicator(icon: ImageView, micOn: Boolean) {
+        icon.setImageResource(if (micOn) R.drawable.meshcall_ic_mic else R.drawable.ic_mic_off)
+        icon.setBackgroundResource(if (micOn) R.drawable.bg_pin_glass else R.drawable.bg_tile_badge)
+        icon.imageTintList = ColorStateList.valueOf(
+            color(if (micOn) R.color.meshcall_white else R.color.meshcall_badge_red),
+        )
     }
 
     private fun buildBadge(iconRes: Int) = ImageView(context).apply {
@@ -446,7 +467,7 @@ class MeshParticipantGrid(
 
     private fun applyChrome(tile: Tile, participant: MeshParticipant) {
         tile.chip.text = participant.userName
-        tile.micBadge.visibility = visibleIf(!participant.micEnabled)
+        applyMicIndicator(tile.micBadge, participant.micEnabled)
         tile.camBadge.visibility = visibleIf(!participant.cameraEnabled)
         tile.ring.visibility = visibleIf(tile.peerId == speakerId)
         tile.pinBadge.visibility = visibleIf(tile.peerId == pinnedId)
@@ -556,6 +577,10 @@ class MeshParticipantGrid(
      * row on a phone makes every tile a sliver), landscape gets up to 4. Partial rows —
      * e.g. 3 tiles in a 2x2 grid — are centered instead of left-aligned, and the whole
      * block is centered vertically, so the layout stays symmetric as people join/leave.
+     *
+     * Two participants are special-cased (Meet/WhatsApp convention): sqrt-based columns
+     * would put them side by side even in portrait, leaving two tall slivers. Portrait
+     * instead stacks them into a 50/50 top-bottom split; landscape keeps them side by side.
      */
     private fun applyGrid() {
         val width = gridContainer.width
@@ -567,7 +592,11 @@ class MeshParticipantGrid(
             val n = mainIds.size
             val gap = dp(10)
             val maxCols = if (width > height) 4 else 2
-            val cols = ceil(sqrt(n.toDouble())).toInt().coerceIn(1, maxCols)
+            val cols = if (n == 2) {
+                if (width > height) 2 else 1
+            } else {
+                ceil(sqrt(n.toDouble())).toInt().coerceIn(1, maxCols)
+            }
             val rows = ceil(n.toDouble() / cols).toInt()
             val cellW = (width - gap * (cols + 1)) / cols
             val cellH = (height - gap * (rows + 1)) / rows

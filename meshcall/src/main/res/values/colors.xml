@@ -16,4 +16,5 @@
     <color name="meshcall_on_chrome_dim">#99FFFFFF</color>
     <color name="meshcall_control_background">#1AFFFFFF</color>
     <color name="meshcall_danger">#FFDC2626</color>
+    <color name="meshcall_avatar_background">#33FFFFFF</color>
 </resources>

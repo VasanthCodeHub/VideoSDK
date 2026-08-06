@@ -18,6 +18,7 @@ import org.json.JSONObject
  *   answer         { to, sdp: { type, sdp } }
  *   ice-candidate  { to, candidate: { candidate, sdpMLineIndex, sdpMid } }
  *   peer-state     { state: { micEnabled, cameraEnabled } }        // `to` optional
+ *   mute-request   { to }
  *
  * Server → client (the broker always injects `from`):
  *   meeting-members { meeting, peers: [ { userId, userName } ] }
@@ -26,7 +27,14 @@ import org.json.JSONObject
  *   offer / answer  { from, sdp: {...} }
  *   ice-candidate   { from, candidate: {...} }
  *   peer-state      { from, state: {...} }
+ *   mute-request    { from }
  *   error           { error }
+ *
+ * `mute-request` is a client-only contract today: the broker in `VideoSDKServer/server`
+ * does not yet relay it, so [SocketIOSignalingClient] emits/listens for it but no
+ * `mute-request` will actually reach a peer until the broker adds a matching handler
+ * (mirroring how it already relays `offer`/`answer`/`ice-candidate` by `to`). Once that
+ * lands server-side, this path needs no further client changes.
  *
  * See README §3. Any change here must land in the same commit as the README update.
  */
@@ -52,6 +60,7 @@ internal object SignalingSchema {
     const val TYPE_ANSWER = "answer"
     const val TYPE_ICE_CANDIDATE = "ice-candidate"
     const val TYPE_PEER_STATE = "peer-state"
+    const val TYPE_MUTE_REQUEST = "mute-request"
     const val TYPE_ERROR = "error"
 
     /** One participant in the meeting roster snapshot. */

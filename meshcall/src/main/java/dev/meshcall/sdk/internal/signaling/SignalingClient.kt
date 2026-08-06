@@ -62,6 +62,9 @@ internal sealed class SignalEvent {
         val state: SignalingSchema.PeerStatePayload,
     ) : SignalEvent()
 
+    /** [fromId] is asking us to mute our mic. Honored automatically — see [MeshCall.requestMute]. */
+    data class MuteRequest(val fromId: String) : SignalEvent()
+
     /** Participant roster snapshot delivered after every (re)join. */
     data class MeetingSnapshot(
         val peers: List<SignalingSchema.MeetingPeerInfo>,

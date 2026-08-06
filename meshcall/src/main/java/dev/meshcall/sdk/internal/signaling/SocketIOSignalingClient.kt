@@ -129,6 +129,11 @@ internal class SocketIOSignalingClient(
                 )
             }
         }
+        s.on(SignalingSchema.TYPE_MUTE_REQUEST) { args ->
+            args.firstOrNull()?.asJson()?.let { j ->
+                _events.tryEmit(SignalEvent.MuteRequest(j.optString(SignalingSchema.KEY_FROM)))
+            }
+        }
         s.on(SignalingSchema.TYPE_MEETING_MEMBERS) { args ->
             args.firstOrNull()?.asJson()?.let { j ->
                 val peers = j.optJSONArray(SignalingSchema.KEY_PEERS)?.let { arr ->

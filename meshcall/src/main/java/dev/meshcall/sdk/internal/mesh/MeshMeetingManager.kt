@@ -261,6 +261,15 @@ internal class MeshMeetingManager(
                 publishPeers()
             }
 
+            is SignalEvent.MuteRequest -> {
+                // Only honor requests from someone actually in the meeting — a stale or
+                // spoofed `from` should not be able to silence us.
+                if (event.fromId in remoteNames) {
+                    MeshLog.i(TAG) { "muted at request of ${event.fromId}" }
+                    engine?.enableMic(false)
+                }
+            }
+
             is SignalEvent.SignalingDisconnected -> {
                 _signalingConnected.value = false
                 // socket.io reconnects on its own; the reconnect path re-emits
@@ -464,6 +473,16 @@ internal class MeshMeetingManager(
     fun switchCamera() = engine?.switchCamera() ?: Unit
     fun setMic(enabled: Boolean) = engine?.enableMic(enabled) ?: Unit
     fun setCamera(enabled: Boolean) = engine?.enableCamera(enabled) ?: Unit
+
+    /**
+     * Ask [peerId] to mute their mic. Honored automatically on their end — see
+     * [SignalEvent.MuteRequest] — there is no permission gate, since the mesh has no host
+     * role today. Requires broker support for `mute-request`; see [SignalingSchema].
+     */
+    fun requestMute(peerId: String) {
+        val client = signaling ?: return
+        scope.launch { client.sendMessage(SignalingSchema.TYPE_MUTE_REQUEST, peerId, "{}") }
+    }
 
     fun localVideo(): VideoTrack? = localVideoTrack
 
