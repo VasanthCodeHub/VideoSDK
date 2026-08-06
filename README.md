@@ -48,7 +48,7 @@ grid.
 ```
 :meshcall   The SDK (dev.meshcall.sdk) — WebRTC engine, signaling, mesh, and the whole meeting UI
 :app        Host app (com.example.videocall) — lobby, meeting creation, permissions
-server/     Node.js signaling broker — not built yet (VC-019)
+server/     Node.js signaling broker (VC-019) — separate repo: VideoSDKServer/server/
 ```
 
 **The SDK owns the meeting screen.** Everything a meeting *looks* like — video grid,
@@ -240,7 +240,8 @@ connection-dot UI.
 
 ### With a broker
 
-1. Run the broker on port 3000 (VC-019).
+1. Run the broker on port 3000: `cd VideoSDKServer/server && npm install && npm start`
+   (separate repo, VC-019 — see its README for details and a smoke test).
 2. Emulator: `adb reverse tcp:3000 tcp:3000`, use `ws://127.0.0.1:3000` (or `ws://10.0.2.2:3000`).
 3. Real devices: same Wi-Fi, `ws://<PC-LAN-IP>:3000`, firewall open on TCP 3000.
 4. Both devices join the same meeting code.
@@ -293,6 +294,7 @@ symmetric NAT.
 | VC-017 | Pin a participant | Tap a tile or overflow chip |
 | VC-018 | Overflow strip | Participants beyond 4 main slots become avatar chips |
 | VC-020 | **Meeting UI moved into the SDK** | `MeshMeetingView` owns the screen; the app is lobby + permissions |
+| VC-019 | **Node.js signaling broker** | Implements §4 exactly; in-memory, single-process, Socket.IO v4. See `VideoSDKServer/server/` (separate repo) |
 
 ### Partial
 
@@ -304,7 +306,6 @@ symmetric NAT.
 
 | ID | Feature | Priority | Notes |
 |----|---------|----------|-------|
-| VC-019 | **Node.js signaling broker** | **Critical** | Nothing but demo mode works without it. Implement §4 exactly. |
 | VC-012 | Foreground service / background meeting | High | Survive screen lock; Android 14+ FGS type `camera\|microphone` |
 | VC-014 | Actionable error surfacing | High | Distinct dialogs: server unreachable (with retry), camera in use, mic denied |
 | VC-007 | In-meeting text chat | Medium | Signaling relay first, DataChannel later (additive event) |
@@ -316,7 +317,6 @@ symmetric NAT.
 
 ### Known limitations
 
-- **No broker exists yet** — only demo mode works end to end today.
 - Cross-network calling needs a **TURN** server you supply.
 - Mesh ceiling ~5–6 participants; design target is 3–4 (§1).
 - No speaker/earpiece audio routing control.
@@ -333,7 +333,7 @@ symmetric NAT.
 | 1 ✅ | Lobby, full-mesh WebRTC, tiles, toggles, leave | Two phones on one LAN hold a meeting |
 | 2 ✅ | Meeting UX: camera switch, badges, participant list, grid, pin, active speaker | 8-peer demo stable in portrait + landscape |
 | 3 ✅ | SDK owns the meeting UI; STUN/TURN; correctness pass | App integrates in three calls |
-| 4 ▶ | **Node.js broker (VC-019)**, foreground service, error surfacing | Two real phones meet over the internet through the broker + TURN |
+| 4 ▶ | Node.js broker (VC-019) ✅, foreground service, error surfacing | Two real phones meet over the internet through the broker + TURN |
 | 5 | Text chat, deep links, quality presets, recording | Chat stable in a 4-person mesh |
 | 6 | Auth, captions, screen share, SFU if needed | Meetings beyond 6 participants |
 

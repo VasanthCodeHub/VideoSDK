@@ -7,15 +7,19 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.View
-import android.widget.EditText
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.materialswitch.MaterialSwitch
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.videocall.data.MeetingHistoryRepository
+import com.example.videocall.databinding.ActivityLobbyBinding
+import com.example.videocall.databinding.DialogCreateMeetingBinding
+import com.example.videocall.databinding.DialogJoinMeetingBinding
+import com.example.videocall.databinding.DialogMeetingCodeBinding
+import kotlinx.coroutines.launch
 import java.security.SecureRandom
 
 /**
@@ -26,52 +30,71 @@ import java.security.SecureRandom
  */
 class LobbyActivity : AppCompatActivity() {
 
+    private lateinit var binding: ActivityLobbyBinding
+    private val repository by lazy { MeetingHistoryRepository(applicationContext) }
+    private val adapter = RecentMeetingAdapter()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_lobby)
+        binding = ActivityLobbyBinding.inflate(layoutInflater)
+        setContentView(binding.root)
         fitTopSafeArea()
 
-        findViewById<MaterialButton>(R.id.btn_create_meeting).setOnClickListener {
-            showMeetingCodeDialog(generateMeetingCode())
-        }
-        findViewById<MaterialButton>(R.id.btn_join_meeting).setOnClickListener {
-            showJoinDialog()
+        binding.btnCreateMeeting.setOnClickListener { showCreateMeetingDialog() }
+        binding.btnJoinMeeting.setOnClickListener { showJoinDialog() }
+        binding.btnAccount.setOnClickListener {
+            Toast.makeText(this, R.string.lobby_subtitle, Toast.LENGTH_SHORT).show()
         }
 
-        findViewById<TextView>(R.id.btn_rejoin_1).setOnClickListener {
-            startMeeting(MEETING_1_CODE, DEFAULT_BROKER)
-        }
-        findViewById<TextView>(R.id.btn_rejoin_2).setOnClickListener {
-            startMeeting(MEETING_2_CODE, DEFAULT_BROKER)
-        }
-        findViewById<TextView>(R.id.btn_view_all).setOnClickListener {
-            Toast.makeText(this, R.string.enter_meeting_code, Toast.LENGTH_SHORT).show()
-        }
-        findViewById<View>(R.id.btn_account).setOnClickListener {
-            Toast.makeText(this, R.string.lobby_subtitle, Toast.LENGTH_SHORT).show()
+        binding.recentMeetingsList.layoutManager = LinearLayoutManager(this)
+        binding.recentMeetingsList.adapter = adapter
+    }
+
+    override fun onResume() {
+        super.onResume()
+        loadRecentMeetings()
+    }
+
+    private fun loadRecentMeetings() {
+        lifecycleScope.launch {
+            val meetings = repository.recentMeetings()
+            adapter.submitList(meetings)
+            binding.emptyRecentMeetings.visibility =
+                if (meetings.isEmpty()) View.VISIBLE else View.GONE
+            binding.recentMeetingsList.visibility =
+                if (meetings.isEmpty()) View.GONE else View.VISIBLE
         }
     }
 
     private fun fitTopSafeArea() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
-        val root = findViewById<View>(R.id.root)
-        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(0, bars.top, 0, bars.bottom)
             insets
         }
     }
 
+    private fun showCreateMeetingDialog() {
+        val dialogBinding = DialogCreateMeetingBinding.inflate(layoutInflater)
+        val dialog = AlertDialog.Builder(this).setView(dialogBinding.root).create()
+
+        dialogBinding.btnCreate.setOnClickListener {
+            val title = dialogBinding.etMeetingTitle.text.toString().trim()
+            dialog.dismiss()
+            showMeetingCodeDialog(generateMeetingCode(), title)
+        }
+        dialog.show()
+    }
+
     private fun showJoinDialog() {
-        val view = layoutInflater.inflate(R.layout.dialog_join_meeting, null)
-        val codeField = view.findViewById<EditText>(R.id.et_meeting_code)
-        val brokerField = view.findViewById<EditText>(R.id.et_broker)
-        brokerField.setText(DEFAULT_BROKER)
+        val dialogBinding = DialogJoinMeetingBinding.inflate(layoutInflater)
+        dialogBinding.etBroker.setText(DEFAULT_BROKER)
 
-        val dialog = AlertDialog.Builder(this).setView(view).create()
+        val dialog = AlertDialog.Builder(this).setView(dialogBinding.root).create()
 
-        view.findViewById<MaterialButton>(R.id.btn_join).setOnClickListener {
-            val code = codeField.text.toString().trim().uppercase()
+        dialogBinding.btnJoin.setOnClickListener {
+            val code = dialogBinding.etMeetingCode.text.toString().trim().uppercase()
             if (code.isEmpty()) {
                 Toast.makeText(this, R.string.enter_meeting_code, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -79,34 +102,35 @@ class LobbyActivity : AppCompatActivity() {
             dialog.dismiss()
             startMeeting(
                 meetingCode = code,
-                broker = brokerField.text.toString().trim(),
-                demo = view.findViewById<MaterialSwitch>(R.id.sw_demo).isChecked,
+                broker = dialogBinding.etBroker.text.toString().trim(),
+                demo = dialogBinding.swDemo.isChecked,
             )
         }
         dialog.show()
     }
 
-    private fun showMeetingCodeDialog(meetingCode: String) {
-        val view = layoutInflater.inflate(R.layout.dialog_meeting_code, null)
-        view.findViewById<TextView>(R.id.meeting_code).text = meetingCode
+    private fun showMeetingCodeDialog(meetingCode: String, title: String) {
+        val dialogBinding = DialogMeetingCodeBinding.inflate(layoutInflater)
+        dialogBinding.meetingCode.text = meetingCode
 
-        val dialog = AlertDialog.Builder(this).setView(view).create()
+        val dialog = AlertDialog.Builder(this).setView(dialogBinding.root).create()
 
-        view.findViewById<View>(R.id.btn_copy).setOnClickListener {
+        dialogBinding.btnCopy.setOnClickListener {
             copyToClipboard(meetingCode)
             dialog.dismiss()
             Toast.makeText(this, R.string.meeting_code_copied, Toast.LENGTH_SHORT).show()
         }
-        view.findViewById<View>(R.id.btn_share).setOnClickListener {
+        dialogBinding.btnShare.setOnClickListener {
             dialog.dismiss()
             shareMeetingCode(meetingCode)
         }
-        view.findViewById<View>(R.id.btn_start).setOnClickListener {
+        dialogBinding.btnStart.setOnClickListener {
             dialog.dismiss()
             startMeeting(
                 meetingCode = meetingCode,
                 broker = DEFAULT_BROKER,
-                demo = view.findViewById<MaterialSwitch>(R.id.sw_demo).isChecked,
+                title = title,
+                demo = dialogBinding.swDemo.isChecked,
             )
         }
         dialog.show()
@@ -125,11 +149,17 @@ class LobbyActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(send, getString(R.string.share_meeting_title)))
     }
 
-    private fun startMeeting(meetingCode: String, broker: String, demo: Boolean = false) {
+    private fun startMeeting(
+        meetingCode: String,
+        broker: String,
+        title: String = "",
+        demo: Boolean = false,
+    ) {
         startActivity(
             Intent(this, MainActivity::class.java)
                 .putExtra(EXTRA_BROKER, broker.ifEmpty { DEFAULT_BROKER })
                 .putExtra(EXTRA_MEETING, meetingCode)
+                .putExtra(EXTRA_TITLE, title)
                 .putExtra(EXTRA_NAME, Build.MODEL)
                 .putExtra(EXTRA_DEMO, demo)
                 .putExtra(EXTRA_PEERS, DEFAULT_DEMO_PEERS),
@@ -149,6 +179,7 @@ class LobbyActivity : AppCompatActivity() {
     private companion object {
         const val EXTRA_BROKER = "broker"
         const val EXTRA_MEETING = "meeting"
+        const val EXTRA_TITLE = "title"
         const val EXTRA_NAME = "name"
         const val EXTRA_DEMO = "demo"
         const val EXTRA_PEERS = "peers"
@@ -157,8 +188,6 @@ class LobbyActivity : AppCompatActivity() {
         const val DEFAULT_DEMO_PEERS = 6
         const val MEETING_CODE_LENGTH = 6
         const val MEETING_CLIP_LABEL = "meeting_code"
-        const val MEETING_1_CODE = "842194"
-        const val MEETING_2_CODE = "119450"
         const val MEETING_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
         val secureRandom = SecureRandom()
     }

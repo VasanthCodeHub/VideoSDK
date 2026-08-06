@@ -5,6 +5,8 @@
     <!-- Lobby -->
     <string name="lobby_subtitle">Create a meeting to start a call, or join one with a shared meeting code.</string>
     <string name="create_meeting">Create Meeting</string>
+    <string name="create_meeting_hint">Give your meeting a title before you start it.</string>
+    <string name="meeting_title_hint">Meeting title</string>
     <string name="join_meeting">Join Meeting</string>
     <string name="join_meeting_hint">Enter a meeting code to join an existing meeting.</string>
     <string name="or_join_with_code">or join with a code</string>
@@ -26,16 +28,12 @@
     <!-- Recent meetings -->
     <string name="account">Account</string>
     <string name="recent_meetings">Recent Meetings</string>
-    <string name="view_all">View all</string>
+    <string name="no_recent_meetings">No recent meetings yet. Meetings you create or join will show up here.</string>
     <string name="meeting_icon">Meeting icon</string>
-    <string name="meeting_chip_today">TODAY, 10:00 AM</string>
+    <string name="meeting_chip_today">TODAY, %1$s</string>
     <string name="meeting_chip_yesterday">YESTERDAY</string>
-    <string name="meeting_1_title">Q3 Product Strategy Sync</string>
-    <string name="meeting_1_id">ID: 842-194-002</string>
-    <string name="meeting_2_title">Design Review: Onboarding</string>
-    <string name="meeting_2_id">ID: 119-450-881</string>
-    <string name="meeting_participants">Participants: 3</string>
-    <string name="rejoin">Rejoin</string>
+    <string name="meeting_id_format">ID: %1$s</string>
+    <string name="meeting_participants">Participants: %1$d</string>
 
     <!-- Meeting screen (host-owned bits only; the rest lives in the SDK) -->
     <string name="permissions_required">Camera and microphone are required to join a meeting.</string>

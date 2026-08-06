@@ -4,17 +4,19 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
+import com.example.videocall.data.MeetingHistoryRepository
+import com.example.videocall.databinding.ActivityMainBinding
 import dev.meshcall.sdk.api.LocalIdentityProvider
 import dev.meshcall.sdk.api.MeshCall
 import dev.meshcall.sdk.api.MeshCallConfig
-import dev.meshcall.sdk.ui.MeshMeetingView
+import kotlinx.coroutines.launch
 
 /**
  * Host for the in-meeting screen.
@@ -31,7 +33,13 @@ import dev.meshcall.sdk.ui.MeshMeetingView
 class MainActivity : AppCompatActivity() {
 
     private var call: MeshCall? = null
-    private lateinit var meetingView: MeshMeetingView
+    private lateinit var binding: ActivityMainBinding
+    private val historyRepository by lazy { MeetingHistoryRepository(applicationContext) }
+
+    private var meetingCode: String = ""
+    private var meetingTitle: String = ""
+    private var meetingStartedAt: Long = 0L
+    private var lastParticipantCount: Int = 0
 
     private val permissions =
         arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
@@ -48,15 +56,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
         fitTopSafeArea()
 
-        meetingView = findViewById(R.id.meeting_view)
-        meetingView.onLeave = { finish() }
-        meetingView.onShareScreen = {
+        binding.meetingView.onLeave = { saveMeetingHistory(); finish() }
+        binding.meetingView.onShareScreen = {
             Toast.makeText(this, R.string.share_coming_soon, Toast.LENGTH_SHORT).show()
         }
-        meetingView.onMoreOptions = {
+        binding.meetingView.onMoreOptions = {
             Toast.makeText(this, R.string.more_coming_soon, Toast.LENGTH_SHORT).show()
         }
 
@@ -73,6 +81,10 @@ class MainActivity : AppCompatActivity() {
         val name = intent.getStringExtra(EXTRA_NAME) ?: Build.MODEL
         val simulatedPeers = intent.getIntExtra(EXTRA_PEERS, DEFAULT_DEMO_PEERS)
 
+        meetingCode = meetingId
+        meetingTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+        meetingStartedAt = System.currentTimeMillis()
+
         // Identity: without an auth backend the SDK just needs an opaque, stable id.
         // It also decides who offers, so it must be unique per participant.
         LocalIdentityProvider.userId = "$name-${System.currentTimeMillis()}"
@@ -84,13 +96,29 @@ class MainActivity : AppCompatActivity() {
         } else {
             mesh.join(broker, meetingId, name, MeshCallConfig())
         }
-        meetingView.attach(mesh, meetingId, showConnectionBanner = !demo)
+        binding.meetingView.attach(mesh, meetingId, showConnectionBanner = !demo)
+
+        lifecycleScope.launch {
+            mesh.participants.collect { peers -> lastParticipantCount = peers.size }
+        }
+    }
+
+    private fun saveMeetingHistory() {
+        if (meetingCode.isEmpty()) return
+        lifecycleScope.launch {
+            historyRepository.recordMeeting(
+                code = meetingCode,
+                title = meetingTitle,
+                startedAt = meetingStartedAt,
+                // participants excludes self; +1 to count the local participant too.
+                participantCount = lastParticipantCount + 1,
+            )
+        }
     }
 
     private fun fitTopSafeArea() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
-        val root = findViewById<View>(R.id.root)
-        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(0, bars.top, 0, bars.bottom)
             insets
@@ -99,7 +127,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        meetingView.detach()
+        binding.meetingView.detach()
         call?.dispose()
         call = null
     }
@@ -107,6 +135,7 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val EXTRA_BROKER = "broker"
         const val EXTRA_MEETING = "meeting"
+        const val EXTRA_TITLE = "title"
         const val EXTRA_NAME = "name"
         const val EXTRA_DEMO = "demo"
         const val EXTRA_PEERS = "peers"
