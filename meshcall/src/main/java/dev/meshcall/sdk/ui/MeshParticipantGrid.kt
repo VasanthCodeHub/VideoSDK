@@ -29,7 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.webrtc.EglBase
 import org.webrtc.MediaStream
-import org.webrtc.ScalingMode
+import org.webrtc.RendererCommon
 import org.webrtc.SurfaceViewRenderer
 import org.webrtc.VideoTrack
 import kotlin.math.ceil
@@ -466,7 +466,7 @@ class MeshParticipantGrid(
         renderer.setEnableHardwareScaler(true)
         // Fill the tile edge to edge: the default stretch mode distorts non-matching
         // aspects, which reads as "blurry" video on non-16:9 tiles.
-        renderer.setScalingMode(ScalingMode.SCALE_ASPECT_FILL)
+        renderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
         // Every surface stays in the underlay plane so tile chrome (window plane) always
         // draws above the video. See README §7 rule 6.
         renderer.setZOrderMediaOverlay(false)
