@@ -1,292 +1,117 @@
 package com.example.videocall
 
 import android.Manifest
-import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.pm.PackageManager
-import android.content.res.ColorStateList
-import android.os.Bundle
-import android.os.SystemClock
 import android.os.Build
+import android.os.Bundle
 import android.view.View
-import android.widget.FrameLayout
-import android.widget.ImageButton
-import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.lifecycleScope
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import dev.meshcall.sdk.api.LocalIdentityProvider
 import dev.meshcall.sdk.api.MeshCall
-import dev.meshcall.sdk.api.MeshRoomPeer
-import dev.meshcall.sdk.ui.MeshCallRoomView
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import java.util.Locale
+import dev.meshcall.sdk.api.MeshCallConfig
+import dev.meshcall.sdk.ui.MeshMeetingView
 
 /**
- * In-call host for the MeshCall SDK.
+ * Host for the in-meeting screen.
  *
- * Requests camera + microphone, joins a room (real broker or offline demo), binds the
- * [MeshCallRoomView], and owns the call chrome: call timer, signaling banner,
- * participants panel, and the mic / camera / switch-camera / end controls.
+ * Everything the meeting *looks* like — video grid, meeting-code badge, timer, signaling
+ * banner, participants panel, mic / camera / switch-camera / share / more / leave controls
+ * — belongs to the SDK's [MeshMeetingView]. This activity keeps only what genuinely
+ * belongs to the host app: runtime permissions, identity, and navigation.
  *
  * Launch extras:
- *   -e broker ws://10.0.2.2:3000 -e room demo-room --es name "Alice"   (real broker)
- *   -e demo 1 -e peers 8                                                (offline demo)
+ *   -e broker ws://10.0.2.2:3000 -e meeting ABC123 -e name Alice   (real broker)
+ *   --ez demo true --ei peers 8                                    (offline demo)
  */
 class MainActivity : AppCompatActivity() {
 
     private var call: MeshCall? = null
-    private var roomView: MeshCallRoomView? = null
-    private var timerJob: Job? = null
-    private var callStartedAt = 0L
-
-    // Mirrors of the last toggles so the FAB tint can flip (independent of broker).
-    private var micOn = true
-    private var camOn = true
-    private var overflowLabel: TextView? = null
+    private lateinit var meetingView: MeshMeetingView
 
     private val permissions =
         arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
-            if (grants.entries.all { it.value }) {
-                startCall()
+            if (grants.values.all { it }) {
+                startMeeting()
             } else {
-                Toast.makeText(this, "Camera and mic are required for the call.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, R.string.permissions_required, Toast.LENGTH_LONG).show()
+                finish()
             }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
         fitTopSafeArea()
 
-        findViewById<FloatingActionButton>(R.id.btn_mic).setOnClickListener {
-            micOn = !micOn
-            val btn = findViewById<FloatingActionButton>(R.id.btn_mic)
-            btn.setImageResource(if (micOn) R.drawable.ic_mic else R.drawable.ic_mic_off)
-            btn.backgroundTintList = if (micOn) null else ColorStateList.valueOf(0xFFDC2626.toInt())
-            call?.toggleMic()
-            roomView?.setLocalMediaState(micOn, camOn)
-        }
-        findViewById<FloatingActionButton>(R.id.btn_camera).setOnClickListener {
-            camOn = !camOn
-            val btn = findViewById<FloatingActionButton>(R.id.btn_camera)
-            btn.setImageResource(if (camOn) R.drawable.ic_videocam_on else R.drawable.ic_videocam_off)
-            btn.backgroundTintList = if (camOn) null else ColorStateList.valueOf(0xFFDC2626.toInt())
-            call?.toggleCamera()
-            roomView?.setLocalMediaState(micOn, camOn)
-        }
-        findViewById<FloatingActionButton>(R.id.btn_share).setOnClickListener {
+        meetingView = findViewById(R.id.meeting_view)
+        meetingView.onLeave = { finish() }
+        meetingView.onShareScreen = {
             Toast.makeText(this, R.string.share_coming_soon, Toast.LENGTH_SHORT).show()
         }
-        findViewById<FloatingActionButton>(R.id.btn_more).setOnClickListener {
+        meetingView.onMoreOptions = {
             Toast.makeText(this, R.string.more_coming_soon, Toast.LENGTH_SHORT).show()
-        }
-        findViewById<ImageButton>(R.id.btn_switch_cam).setOnClickListener { call?.switchCamera() }
-        findViewById<FloatingActionButton>(R.id.btn_end).setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle(R.string.end_call_title)
-                .setMessage(R.string.end_call_message)
-                .setPositiveButton(R.string.end_call_leave) { _, _ ->
-                    roomView?.release()
-                    call?.leave()
-                    finish()
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
-        }
-        findViewById<ImageButton>(R.id.btn_participants).setOnClickListener {
-            toggleParticipants()
-        }
-        findViewById<TextView>(R.id.txtRoomCode).setOnClickListener {
-            copyRoomCode()
-        }
-
-        ObjectAnimator.ofFloat(findViewById<View>(R.id.dot_pulse), View.ALPHA, 0.35f, 1f).apply {
-            duration = 900L
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            start()
         }
 
         val missing = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing.isEmpty()) startCall() else permissionLauncher.launch(permissions)
+        if (missing.isEmpty()) startMeeting() else permissionLauncher.launch(permissions)
+    }
+
+    private fun startMeeting() {
+        val demo = intent.getBooleanExtra(EXTRA_DEMO, false)
+        val broker = intent.getStringExtra(EXTRA_BROKER) ?: DEFAULT_BROKER
+        val meetingId = intent.getStringExtra(EXTRA_MEETING) ?: DEFAULT_MEETING
+        val name = intent.getStringExtra(EXTRA_NAME) ?: Build.MODEL
+        val simulatedPeers = intent.getIntExtra(EXTRA_PEERS, DEFAULT_DEMO_PEERS)
+
+        // Identity: without an auth backend the SDK just needs an opaque, stable id.
+        // It also decides who offers, so it must be unique per participant.
+        LocalIdentityProvider.userId = "$name-${System.currentTimeMillis()}"
+
+        val mesh = MeshCall(applicationContext)
+        call = mesh
+        if (demo) {
+            mesh.joinDemo(meetingId, name, simulatedPeers)
+        } else {
+            mesh.join(broker, meetingId, name, MeshCallConfig())
+        }
+        meetingView.attach(mesh, meetingId, showConnectionBanner = !demo)
     }
 
     private fun fitTopSafeArea() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
         val root = findViewById<View>(R.id.root)
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
-            val top = insets.getInsets(WindowInsetsCompat.Type.systemBars()).top
-            view.setPadding(0, top, 0, 0)
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(0, bars.top, 0, bars.bottom)
             insets
         }
     }
 
-    private fun startCall() {
-        val demo = intent.getBooleanExtra(EXTRA_DEMO, false)
-        val broker = intent.getStringExtra(BROKER_EXTRA) ?: DEFAULT_BROKER
-        val room = intent.getStringExtra(ROOM_EXTRA) ?: DEFAULT_ROOM
-        val name = intent.getStringExtra(NAME_EXTRA) ?: DEFAULT_NAME
-        val simulatedPeers = intent.getIntExtra(EXTRA_PEERS, DEFAULT_DEMO_PEERS)
-
-        findViewById<TextView>(R.id.txtRoomCode).text = room
-
-        // Identity: without a real auth backend the SDK takes an opaque user id.
-        LocalIdentityProvider.userId = "$name-${System.currentTimeMillis()}"
-
-        val container = findViewById<FrameLayout>(R.id.call_container)
-        val overflow = findViewById<LinearLayout>(R.id.overflow_strip)
-        val view = MeshCallRoomView(this, container, overflow)
-        roomView = view
-        view.onPinRequest = { id ->
-            view.setPinned(if (view.pinnedPeerId == id) null else id)
-        }
-        overflowLabel = findViewById<TextView>(R.id.overflow_label)
-
-        val mesh = MeshCall(applicationContext)
-        call = mesh
-        if (demo) {
-            mesh.joinDemo(roomId = room, displayName = name, simulatedPeers = simulatedPeers)
-        } else {
-            mesh.join(brokerUrl = broker, roomId = room, displayName = name)
-        }
-        view.bind(mesh)
-
-        lifecycleScope.launch {
-            mesh.speaker.collect { speakerId -> view.setSpeaker(speakerId) }
-        }
-
-        lifecycleScope.launch {
-            mesh.errors.collect { err ->
-                Toast.makeText(this@MainActivity, "Call error: $err", Toast.LENGTH_SHORT).show()
-            }
-        }
-        lifecycleScope.launch {
-            mesh.connected.collect { isConnected ->
-                findViewById<TextView>(R.id.banner_conn).visibility =
-                    if (isConnected || demo) View.GONE else View.VISIBLE
-            }
-        }
-        lifecycleScope.launch {
-            mesh.peers.collect { renderParticipants(it) }
-        }
-        startTimer()
-    }
-
-    // ---- Timer ---------------------------------------------------------------
-
-    private fun startTimer() {
-        callStartedAt = SystemClock.elapsedRealtime()
-        timerJob?.cancel()
-        timerJob = lifecycleScope.launch {
-            val label = findViewById<TextView>(R.id.txtCallTimer)
-            label.visibility = View.VISIBLE
-            while (true) {
-                val elapsed = SystemClock.elapsedRealtime() - callStartedAt
-                label.text = formatTimer(elapsed)
-                delay(500L)
-            }
-        }
-    }
-
-    private fun formatTimer(elapsedMs: Long): String {
-        val totalSeconds = elapsedMs / 1000
-        val h = totalSeconds / 3600
-        val m = (totalSeconds % 3600) / 60
-        val s = totalSeconds % 60
-        return if (h > 0) {
-            String.format(Locale.US, "%02d:%02d:%02d", h, m, s)
-        } else {
-            String.format(Locale.US, "%02d:%02d", m, s)
-        }
-    }
-
-    // ---- Participants --------------------------------------------------------
-
-    private fun toggleParticipants() {
-        val panel = findViewById<LinearLayout>(R.id.panel_participants)
-        panel.visibility = if (panel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-    }
-
-    private fun renderParticipants(roster: List<MeshRoomPeer>) {
-        val list = findViewById<LinearLayout>(R.id.list_participants)
-        if (list.childCount != roster.size) {
-            list.removeAllViews()
-            roster.forEach { peer -> list.addView(participantRow(peer)) }
-        }
-        findViewById<TextView>(R.id.txtParticipantsTitle).text =
-            getString(R.string.participants_title, roster.size)
-
-        list.post {
-            for (i in 0 until list.childCount) {
-                val peer = roster.getOrNull(i) ?: continue
-                val row = list.getChildAt(i) as TextView
-                row.text = getString(
-                    R.string.peer_state_mic_cam,
-                    peer.userName,
-                    if (peer.micEnabled) getString(R.string.state_on) else getString(R.string.state_off),
-                    if (peer.cameraEnabled) getString(R.string.state_on) else getString(R.string.state_off),
-                )
-            }
-        }
-    }
-
-    private fun participantRow(peer: MeshRoomPeer): TextView =
-        TextView(this).apply {
-            text = peer.userName
-            setTextColor(0xFFE8EDF8.toInt())
-            textSize = 13f
-            setPadding(0, 0, 0, dp(4))
-        }
-
-    // ---- Helpers -------------------------------------------------------------
-
-    private fun copyRoomCode() {
-        val room = intent.getStringExtra(ROOM_EXTRA) ?: DEFAULT_ROOM
-        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("videocall_room_id", room))
-        Toast.makeText(this, R.string.room_copied, Toast.LENGTH_SHORT).show()
-    }
-
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
-
     override fun onDestroy() {
         super.onDestroy()
-        timerJob?.cancel()
-        roomView?.release()
+        meetingView.detach()
         call?.dispose()
         call = null
-        roomView = null
     }
 
     private companion object {
-        const val BROKER_EXTRA = "broker"
-        const val ROOM_EXTRA = "room"
-        const val NAME_EXTRA = "name"
+        const val EXTRA_BROKER = "broker"
+        const val EXTRA_MEETING = "meeting"
+        const val EXTRA_NAME = "name"
         const val EXTRA_DEMO = "demo"
         const val EXTRA_PEERS = "peers"
         const val DEFAULT_BROKER = "ws://10.0.2.2:3000"
-        const val DEFAULT_ROOM = "demo-room"
-        const val DEFAULT_NAME = "Android"
+        const val DEFAULT_MEETING = "demo-meeting"
         const val DEFAULT_DEMO_PEERS = 6
     }
 }

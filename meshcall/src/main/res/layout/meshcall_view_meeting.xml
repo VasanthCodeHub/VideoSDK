@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The complete meeting screen, owned by the SDK.
+
+  Order matters: the top bar comes first, the video grid takes the remaining space, and
+  the control bar sits at the bottom. Chrome never overlaps the grid, so the SurfaceView
+  tiles inside it are never covered (README §7 rule 6). The banner, participants panel,
+  and overflow strip do float over the grid — they are ordinary views on the window
+  plane, which always composites above an underlay surface.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/meshcall_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/meshcall_black"
+    android:orientation="vertical">
+
+    <!-- Top bar: meeting code, live timer, participants + flip-camera actions -->
+    <LinearLayout
+        android:id="@+id/meshcall_top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/meshcall_chrome_background"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="10dp">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="@string/meshcall_desc_secured"
+                android:src="@drawable/meshcall_ic_shield_lock" />
+
+            <TextView
+                android:id="@+id/meshcall_meeting_code"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/meshcall_on_chrome"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <View
+                android:id="@+id/meshcall_live_dot"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:layout_marginStart="12dp"
+                android:background="@drawable/meshcall_bg_dot_pulse" />
+
+            <TextView
+                android:id="@+id/meshcall_timer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:textColor="@color/meshcall_on_chrome"
+                android:textSize="13sp" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/meshcall_btn_participants"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/meshcall_bg_icon_btn"
+                android:contentDescription="@string/meshcall_desc_participants"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/meshcall_ic_groups" />
+
+            <ImageButton
+                android:id="@+id/meshcall_btn_switch_camera"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/meshcall_bg_icon_btn"
+                android:contentDescription="@string/meshcall_desc_switch_camera"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/meshcall_ic_flip_camera" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/meshcall_chrome_divider" />
+    </LinearLayout>
+
+    <!-- Video grid + floating overlays -->
+    <FrameLayout
+        android:id="@+id/meshcall_grid_host"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <FrameLayout
+            android:id="@+id/meshcall_grid_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <dev.meshcall.sdk.ui.MeshVideoRenderer
+                android:id="@+id/meshcall_local_preview"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/meshcall_banner"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/meshcall_bg_banner"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="6dp"
+            android:text="@string/meshcall_connecting_banner"
+            android:textColor="@color/meshcall_white"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/meshcall_participants_panel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/meshcall_bg_panel"
+            android:maxHeight="260dp"
+            android:orientation="vertical"
+            android:padding="12dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/meshcall_participants_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/meshcall_white"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <ScrollView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp">
+
+                <LinearLayout
+                    android:id="@+id/meshcall_participants_list"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </ScrollView>
+        </LinearLayout>
+
+        <!--
+          The glass pill lives on the strip itself, not on the scroll view: the grid
+          toggles the strip's visibility, and a background on the scroll view would leave
+          an empty floating pill behind whenever nobody is in overflow.
+        -->
+        <HorizontalScrollView
+            android:id="@+id/meshcall_overflow_scroll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="12dp"
+            android:elevation="10dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/meshcall_overflow_strip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/meshcall_bg_glass_bar"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="6dp"
+                android:visibility="gone" />
+        </HorizontalScrollView>
+    </FrameLayout>
+
+    <!-- Control bar -->
+    <LinearLayout
+        android:id="@+id/meshcall_controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/meshcall_chrome_background"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="14dp">
+
+        <ImageButton
+            android:id="@+id/meshcall_btn_mic"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/meshcall_bg_control"
+            android:contentDescription="@string/meshcall_desc_mic"
+            android:padding="16dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/meshcall_ic_mic" />
+
+        <ImageButton
+            android:id="@+id/meshcall_btn_camera"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/meshcall_bg_control"
+            android:contentDescription="@string/meshcall_desc_camera"
+            android:padding="16dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/meshcall_ic_videocam_on" />
+
+        <ImageButton
+            android:id="@+id/meshcall_btn_share"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/meshcall_bg_control"
+            android:contentDescription="@string/meshcall_desc_share"
+            android:padding="16dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/meshcall_ic_present_to_all" />
+
+        <ImageButton
+            android:id="@+id/meshcall_btn_more"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/meshcall_bg_control"
+            android:contentDescription="@string/meshcall_desc_more"
+            android:padding="16dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/meshcall_ic_more_horiz" />
+
+        <ImageButton
+            android:id="@+id/meshcall_btn_leave"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="12dp"
+            android:background="@drawable/meshcall_bg_control_danger"
+            android:contentDescription="@string/meshcall_desc_leave"
+            android:padding="16dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/meshcall_ic_call_end" />
+    </LinearLayout>
+
+</LinearLayout>

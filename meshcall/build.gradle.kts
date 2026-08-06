@@ -17,26 +17,16 @@ android {
         minSdk = 24
 
         consumerProguardFiles("consumer-rules.pro")
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles("consumer-rules.pro")
     }
 
-    buildTypes {
-        release {
-            optimization {
-                enable = false
-            }
-        }
-    }
+    // No buildTypes/optimization block: an AAR is never minified on its own. Shrinking is
+    // the consuming app's decision, and `consumer-rules.pro` above is what protects the
+    // SDK's reflective WebRTC entry points when that app does minify.
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    buildFeatures {
-        viewBinding = true
     }
 
     lint {

@@ -1,17 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="meshcall_notification_channel_name">Active call</string>
-    <string name="meshcall_notification_title">Active call</string>
-    <string name="meshcall_notification_text">Ongoing group video call</string>
-    <string name="meshcall_notification_ticker">Call in progress</string>
+    <!-- Foreground-service notification (VC-012) -->
+    <string name="meshcall_notification_channel_name">Active meeting</string>
+    <string name="meshcall_notification_title">Active meeting</string>
+    <string name="meshcall_notification_text">Ongoing group video meeting</string>
+    <string name="meshcall_notification_ticker">Meeting in progress</string>
 
+    <!-- Tile chrome -->
+    <string name="meshcall_you">You</string>
+    <string name="meshcall_pin_participant">Pin participant</string>
+    <string name="meshcall_unpin_participant">Unpin participant</string>
+
+    <!-- Meeting screen -->
+    <string name="meshcall_connecting_banner">Connecting to signaling server…</string>
+    <string name="meshcall_participants_title">Participants (%1$d)</string>
+    <string name="meshcall_participant_state">%1$s · mic %2$s · camera %3$s</string>
+    <string name="meshcall_state_on">on</string>
+    <string name="meshcall_state_off">off</string>
+    <string name="meshcall_meeting_code_copied">Meeting code copied</string>
+    <string name="meshcall_meeting_code_clip_label">meeting_code</string>
+
+    <!-- Controls -->
+    <string name="meshcall_desc_secured">Encrypted meeting</string>
+    <string name="meshcall_desc_mic">Toggle microphone</string>
+    <string name="meshcall_desc_camera">Toggle camera</string>
+    <string name="meshcall_desc_switch_camera">Switch camera</string>
+    <string name="meshcall_desc_participants">Participants</string>
+    <string name="meshcall_desc_share">Share screen</string>
+    <string name="meshcall_desc_more">More options</string>
+    <string name="meshcall_desc_leave">Leave meeting</string>
+
+    <!-- Leave confirmation -->
+    <string name="meshcall_leave_title">Leave meeting?</string>
+    <string name="meshcall_leave_message">You will be disconnected from this meeting.</string>
+    <string name="meshcall_leave_confirm">Leave</string>
+    <string name="meshcall_cancel">Cancel</string>
+
+    <!-- Status labels -->
     <string name="meshcall_status_disconnected">Disconnected</string>
     <string name="meshcall_status_connecting">Connecting…</string>
     <string name="meshcall_status_reconnecting">Reconnecting…</string>
     <string name="meshcall_status_connected">Connected</string>
     <string name="meshcall_status_failed">Failed</string>
     <string name="meshcall_status_muted">Muted</string>
-    <string name="meshcall_pin_participant">Pin participant</string>
-    <string name="meshcall_unpin_participant">Unpin participant</string>
-    <string name="meshcall_you">You</string>
 </resources>

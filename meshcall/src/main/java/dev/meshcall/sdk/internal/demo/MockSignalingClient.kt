@@ -17,17 +17,18 @@ import kotlin.random.Random
 /**
  * Offline stand-in for the signaling broker.
  *
- * Emits a plausible simulated session so the UI (tiles, badges, roster churn) can be
- * developed and exercised while the real Node.js broker is not running. It is a pure
- * [SignalingClient] — the mesh manager does not care what produces [SignalEvent]s — so
- * dropping this file does not affect the production [SocketIOSignalingClient] path.
+ * Emits a plausible simulated session so the meeting UI (tiles, badges, roster churn,
+ * speaker promotion) can be developed while the real Node.js broker does not exist. It is
+ * a plain [SignalingClient] — the mesh does not care what produces [SignalEvent]s — so
+ * deleting this file cannot affect the production path.
  *
  * Simulated behaviour:
- *  - [MockRoomData.PREFILL_PEERS] peers already present → `room-members` snapshot.
- *  - The remaining simulated peers join one by one (staggered) via `peer-joined`.
- *  - Media state churn: a random peer mutes/unmutes every few seconds.
- *  - No real SDP/ICE is exchanged: offers/answers sent by the mesh are dropped, so
- *    `PeerConnection`s stay in "connecting" — exactly the state the UI must render.
+ *  - [MockMeetingData.PREFILL_PEERS] peers already seated → `meeting-members` snapshot.
+ *  - The rest join one by one, staggered, via `peer-joined`.
+ *  - A random peer mutes/unmutes every few seconds.
+ *  - A rotating "speaker" so speaker promotion can be demoed.
+ *  - No real SDP/ICE: offers are dropped, so connections stay in "connecting" — exactly
+ *    the state the placeholder + connection-dot UI must render.
  */
 internal class MockSignalingClient(
     private val userId: String,
@@ -37,9 +38,14 @@ internal class MockSignalingClient(
 
     /** Participant identities we simulate (excluding ourselves). */
     private val simulatedPeers: List<Pair<String, String>> =
-        MockRoomData.participants
-            .take(simulatedPeerCount.coerceIn(MockRoomData.PREFILL_PEERS, MockRoomData.participants.size))
-            .mapIndexed { index, name -> MockRoomData.peerId(index) to name }
+        MockMeetingData.participants
+            .take(
+                simulatedPeerCount.coerceIn(
+                    MockMeetingData.PREFILL_PEERS,
+                    MockMeetingData.participants.size,
+                ),
+            )
+            .mapIndexed { index, name -> MockMeetingData.peerId(index) to name }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var churnJob: Job? = null
@@ -48,72 +54,67 @@ internal class MockSignalingClient(
     private val _events = MutableSharedFlow<SignalEvent>(replay = 16, extraBufferCapacity = 64)
     override val events = _events.asSharedFlow()
 
-    /** Peer ids known to be in the room, with the last state we broadcast for them. */
+    /** Peer ids known to be in the meeting, with the last state we broadcast for them. */
     private val joined = LinkedHashMap<String, Pair<Boolean, Boolean>>()
 
-    override suspend fun connect(roomId: String) {
-        // Presence: we are in the room too.
-        joined[userId] = Pair(true, true)
+    override suspend fun connect(meetingId: String) {
+        joined[userId] = true to true
 
         // 1) Pre-filled roster: a couple of peers already seated.
-        val prefilled = simulatedPeers.take(MockRoomData.PREFILL_PEERS)
-        prefilled.forEach { (id, name) -> joined[id] = Pair(true, true) }
+        val prefilled = simulatedPeers.take(MockMeetingData.PREFILL_PEERS)
+        prefilled.forEach { (id, _) -> joined[id] = true to true }
         _events.emit(
-            SignalEvent.RoomSnapshot(
-                prefilled.map { (id, name) -> SignalingSchema.RoomPeerInfo(id, name) },
-                roomId,
+            SignalEvent.MeetingSnapshot(
+                prefilled.map { (id, name) -> SignalingSchema.MeetingPeerInfo(id, name) },
+                meetingId,
             ),
         )
 
         // 2) The rest trickle in, simulating people tapping "join".
-        simulatedPeers.drop(MockRoomData.PREFILL_PEERS).forEachIndexed { index, (id, name) ->
+        simulatedPeers.drop(MockMeetingData.PREFILL_PEERS).forEachIndexed { index, (id, name) ->
             scope.launch {
-                delay(MockRoomData.JOIN_STAGGER_MS * (index + 1))
-                joined[id] = Pair(true, true)
-                _events.emit(SignalEvent.PeerJoined(id, name, roomId))
+                delay(MockMeetingData.JOIN_STAGGER_MS * (index + 1))
+                joined[id] = true to true
+                _events.emit(SignalEvent.PeerJoined(id, name, meetingId))
             }
         }
 
-        startStateChurn(roomId)
+        startStateChurn()
         startSpeakerChurn()
     }
 
     /**
-     * Simulate a rotating speaker so the "active speaker moves into the main grid"
-     * behavior can be demoed offline. Picks a random peer (frequently one that is
-     * currently sitting in the overflow strip), has them "talk" for a while, then
-     * hands the mic to someone else.
+     * Rotate a simulated speaker so "the active speaker moves into the main grid" can be
+     * demoed offline: pick someone, have them talk for a while, hand the mic on.
      */
     private fun startSpeakerChurn() {
         speakerJob?.cancel()
         speakerJob = scope.launch {
             var current: String? = null
             while (true) {
-                delay(MockRoomData.SPEAKING_GAP_MS)
-                current?.let {
-                    _events.emit(SignalEvent.PeerSpeaking(it, false))
-                }
-                val peersInRoom = joined.keys.toList().filter { it != userId }
-                if (peersInRoom.isEmpty()) continue
-                val next = peersInRoom.random()
+                delay(MockMeetingData.SPEAKING_GAP_MS)
+                current?.let { _events.emit(SignalEvent.PeerSpeaking(it, false)) }
+                val others = joined.keys.filter { it != userId }
+                if (others.isEmpty()) continue
+                val next = others.random()
                 current = next
                 _events.emit(SignalEvent.PeerSpeaking(next, true))
-                delay(MockRoomData.SPEAKING_ON_MS)
+                delay(MockMeetingData.SPEAKING_ON_MS)
             }
         }
     }
 
-    /** Randomly mute/unmute a peer so badges + participant list react live. */
-    private fun startStateChurn(roomId: String) {
+    /** Randomly mute/unmute a peer so badges + the participant list react live. */
+    private fun startStateChurn() {
         churnJob?.cancel()
         churnJob = scope.launch {
             while (true) {
-                delay(MockRoomData.STATE_CHURN_MS * (1 + Random.nextInt(3)))
-                val peersInRoom = joined.keys.toList().filter { it != userId }
-                if (peersInRoom.isEmpty()) continue
-                val victim = peersInRoom.random()
+                delay(MockMeetingData.STATE_CHURN_MS * (1 + Random.nextInt(3)))
+                val others = joined.keys.filter { it != userId }
+                if (others.isEmpty()) continue
+                val victim = others.random()
                 val (mic, cam) = joined.getValue(victim)
-                val next = Pair(!mic, cam)
+                val next = !mic to cam
                 joined[victim] = next
                 _events.emit(
                     SignalEvent.PeerState(
@@ -126,8 +127,8 @@ internal class MockSignalingClient(
     }
 
     override suspend fun sendMessage(msgType: String, targetPeerId: String?, payload: String) {
-        // No real broker to relay to: offers/answers are dropped, mirroring an
-        // unreachable broker from the client's perspective.
+        // No broker to relay to: offers/answers are dropped on purpose, which keeps the
+        // simulated peers in "connecting" and exercises the placeholder UI.
     }
 
     override suspend fun disconnect() {

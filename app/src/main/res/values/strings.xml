@@ -1,32 +1,29 @@
 <resources>
     <string name="app_name">VideoCall</string>
     <string name="app_brand">ConnectPro</string>
-    <string name="desc_mic">Toggle microphone</string>
-    <string name="desc_camera">Toggle camera</string>
-    <string name="desc_end">End call</string>
-    <string name="desc_switch_cam">Switch camera</string>
-    <string name="desc_participants">Participants</string>
-    <string name="desc_share">Share screen</string>
-    <string name="desc_more">More options</string>
-    <string name="desc_secured">Encrypted call</string>
-    <string name="share_coming_soon">Screen sharing is coming soon</string>
-    <string name="more_coming_soon">More options are coming soon</string>
-    <string name="end_call_title">End call?</string>
-    <string name="end_call_message">Are you sure you want to leave the meeting?</string>
-    <string name="end_call_leave">End Call</string>
-    <string name="cancel">Cancel</string>
 
-    <string name="lobby_subtitle">Create a room to start a call, or join one with a shared Room ID.</string>
-    <string name="create_room">Create Room</string>
+    <!-- Lobby -->
+    <string name="lobby_subtitle">Create a meeting to start a call, or join one with a shared meeting code.</string>
     <string name="create_meeting">Create Meeting</string>
     <string name="join_meeting">Join Meeting</string>
-    <string name="join_meeting_hint">Enter a meeting code to join an existing room.</string>
+    <string name="join_meeting_hint">Enter a meeting code to join an existing meeting.</string>
     <string name="or_join_with_code">or join with a code</string>
-    <string name="room_id_hint">Room ID</string>
-    <string name="join_room">Join Room</string>
+    <string name="meeting_code_hint">Meeting code</string>
     <string name="server_hint">Signaling server</string>
-    <string name="enter_room_id">Enter a Room ID to join</string>
+    <string name="enter_meeting_code">Enter a meeting code to join</string>
+    <string name="demo_mode">Demo mode (no server)</string>
 
+    <!-- Meeting code dialog -->
+    <string name="your_meeting_code">Your meeting code</string>
+    <string name="share_meeting_hint">Share this code so others can join your meeting.</string>
+    <string name="start_meeting">Start</string>
+    <string name="copy">Copy</string>
+    <string name="share">Share</string>
+    <string name="meeting_code_copied">Meeting code copied</string>
+    <string name="share_meeting_title">Share meeting code</string>
+    <string name="meeting_share_message">Join my meeting with code: %1$s</string>
+
+    <!-- Recent meetings -->
     <string name="account">Account</string>
     <string name="recent_meetings">Recent Meetings</string>
     <string name="view_all">View all</string>
@@ -40,19 +37,8 @@
     <string name="meeting_participants">Participants: 3</string>
     <string name="rejoin">Rejoin</string>
 
-    <string name="your_room_id">Your Room ID</string>
-    <string name="share_room_hint">Share this code so others can join your call.</string>
-    <string name="start_call">Start Call</string>
-    <string name="copy">Copy</string>
-    <string name="share">Share</string>
-    <string name="room_copied">Room ID copied</string>
-    <string name="share_room_title">Share room code</string>
-    <string name="room_share_message">Join my VideoCall with room code: %1$s</string>
-    <string name="room_code_label">Room: %1$s</string>
-    <string name="connecting_banner">Connecting to signaling server…</string>
-    <string name="participants_title">Participants (%1$d)</string>
-    <string name="demo_mode">Demo mode (no server)</string>
-    <string name="peer_state_mic_cam">%1$s · mic %2$s · camera %3$s</string>
-    <string name="state_on">on</string>
-    <string name="state_off">off</string>
+    <!-- Meeting screen (host-owned bits only; the rest lives in the SDK) -->
+    <string name="permissions_required">Camera and microphone are required to join a meeting.</string>
+    <string name="share_coming_soon">Screen sharing is coming soon</string>
+    <string name="more_coming_soon">More options are coming soon</string>
 </resources>

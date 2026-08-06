@@ -2,119 +2,118 @@ package dev.meshcall.sdk.api
 
 import android.content.Context
 import dev.meshcall.sdk.internal.demo.MockSignalingClient
-import dev.meshcall.sdk.internal.demo.MockRoomData
 import dev.meshcall.sdk.internal.media.MediaConfig
-import dev.meshcall.sdk.internal.mesh.MeshCallManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import dev.meshcall.sdk.internal.mesh.MeshMeetingManager
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
  * Entry point for the MeshCall SDK.
  *
- * Handles one mesh session at a time. [join] replaces any prior session for this
- * instance; [leave] ends the session and frees all media + sockets so the app can
- * background or close the screen safely.
+ * Handles one meeting at a time. [join] replaces any prior session; [leave] ends it and
+ * frees all media and sockets so the screen can close safely. Call [dispose] once from
+ * the host's `onDestroy`.
  *
- * Public state is exposed as cold Kotlin flows so callers may collect from any
- * lifecycle owner without leaking. Call [dispose] when the instance is no longer
- * needed (e.g. Activity.destroy) so sockets and WebRTC resources are released.
+ * Every observable is a stable [Flow] that survives across joins — collect it before or
+ * after [join] and it will start emitting when a session exists.
  *
- * Example:
  * ```
  * val call = MeshCall(applicationContext)
  * call.join(
- *     brokerUrl = "https://signaling.example.com",
- *     roomId = "support-session-42",
+ *     brokerUrl = "wss://signaling.example.com",
+ *     meetingId = "ABC123",
  *     displayName = "Ada",
  * )
- * lifecycleScope.launch { call.peers.collect { render(it) } }
+ * lifecycleScope.launch { call.participants.collect(::render) }
  * ```
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class MeshCall(context: Context) {
 
     private val appContext = context.applicationContext
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-
-    // One live manager at most; replaced on each join, dropped on leave/dispose.
-    private var manager: MeshCallManager? = null
-
-    /** Internal seam: exposes the live manager to the ui package (same module). */
-    internal val meshManager: MeshCallManager?
-        get() = manager
 
     /**
-     * Join a mesh room. Any prior session is left first.
+     * The live manager, as a flow so the public observables can follow it across joins.
+     * Exposing them as plain getters over a nullable field (the previous design) meant a
+     * caller that collected before [join] was stuck on an empty flow forever.
+     */
+    private val managerFlow = MutableStateFlow<MeshMeetingManager?>(null)
+
+    /** Internal seam: lets the `ui` package reach the live manager (same module). */
+    internal val meshManager: MeshMeetingManager?
+        get() = managerFlow.value
+
+    /** Id of the meeting currently joined, or null. */
+    var currentMeetingId: String? = null
+        private set
+
+    /**
+     * Join a meeting.
      *
-     * @param brokerUrl   WebSocket signaling endpoint, e.g. "https://signaling.example.com"
-     * @param roomId      room/group identifier shared by all participants
-     * @param displayName human-readable name broadcast to other participants
+     * @param brokerUrl   signaling endpoint, e.g. `wss://signaling.example.com`
+     * @param meetingId   identifier shared by every participant
+     * @param displayName human-readable name broadcast to the others
+     * @param config      capture, bitrate, and ICE (STUN/TURN) settings
      */
     fun join(
         brokerUrl: String,
-        roomId: String,
+        meetingId: String,
         displayName: String,
+        config: MeshCallConfig = MeshCallConfig(),
     ) {
         leave()
-        val m = MeshCallManager(appContext, brokerUrl, userId, displayName)
-        manager = m
-        m.join(roomId, MediaConfig())
-        _stateFlow = m.roomState.map(::mapState)
-        _connectedFlow = m.signalingConnected
+        val manager = MeshMeetingManager(appContext, brokerUrl, userId, displayName)
+        managerFlow.value = manager
+        currentMeetingId = meetingId
+        manager.join(meetingId, MediaConfig.from(config))
     }
 
     /**
-     * Demo-only join that uses [MockSignalingClient] instead of a real broker, so the
-     * in-call UI can be exercised offline (tiles, badges, roster churn for up to
-     * [MockRoomData.participants] peers). Production flows must use [join].
+     * Demo-only join backed by a mock broker, so the meeting UI can be exercised offline
+     * (tiles, badges, roster churn, rotating speaker). Production code uses [join].
      *
-     * @param roomId          any identifier; shown in the room-code badge
-     * @param displayName     this device's name
-     * @param simulatedPeers  how many remote participants to simulate (2..10)
+     * @param simulatedPeers how many remote participants to simulate (2..10)
      */
     fun joinDemo(
-        roomId: String,
+        meetingId: String,
         displayName: String,
         simulatedPeers: Int,
+        config: MeshCallConfig = MeshCallConfig(),
     ) {
         leave()
-        val m = MeshCallManager(
-            appContext,
-            "mock://local",
-            userId,
-            displayName,
-        ) { _ -> MockSignalingClient(userId, displayName, simulatedPeers) }
-        manager = m
-        m.join(roomId, MediaConfig())
-        _stateFlow = m.roomState.map(::mapState)
-        _connectedFlow = m.signalingConnected
+        val manager = MeshMeetingManager(appContext, "mock://local", userId, displayName) {
+            MockSignalingClient(userId, displayName, simulatedPeers)
+        }
+        managerFlow.value = manager
+        currentMeetingId = meetingId
+        manager.join(meetingId, MediaConfig.from(config))
     }
 
-    private val userId: String
-        get() = LocalIdentityProvider.userId ?: DEFAULT_ANON_ID
-
-    private companion object {
-        const val DEFAULT_ANON_ID = "anonymous"
-    }
+    // ---- Observable state -------------------------------------------------------
 
     /** High-level session status. */
-    private var _stateFlow: Flow<MeshCallState> = flowOf(MeshCallState.IDLE)
-    val state: Flow<MeshCallState> get() = _stateFlow
+    val state: Flow<MeetingState> = managerFlow.flatMapLatest { manager ->
+        manager?.session?.map { session ->
+            if (session is MeshMeetingManager.Session.Active) MeetingState.CONNECTED
+            else MeetingState.IDLE
+        } ?: flowOf(MeetingState.IDLE)
+    }
 
-    /** True while the signaling transport is connected to the broker (or mock). */
-    private var _connectedFlow: Flow<Boolean> = flowOf(false)
-    val connected: Flow<Boolean> get() = _connectedFlow
+    /** True while the signaling transport is connected to the broker (or the mock). */
+    val connected: Flow<Boolean> = managerFlow.flatMapLatest { manager ->
+        manager?.signalingConnected ?: flowOf(false)
+    }
 
-    /** Roster of remote participants (excluding self). */
-    val peers: Flow<List<MeshRoomPeer>>
-        get() = manager?.peers?.map { list ->
+    /** Remote participants, excluding self, in stable roster order. */
+    val participants: Flow<List<MeshParticipant>> = managerFlow.flatMapLatest { manager ->
+        manager?.peers?.map { list ->
             list.map {
-                MeshRoomPeer(
+                MeshParticipant(
                     id = it.id,
                     userName = it.userName,
                     micEnabled = it.micEnabled,
@@ -122,63 +121,73 @@ class MeshCall(context: Context) {
                     connectionState = it.connectionState,
                 )
             }
-        } ?: emptyFlow()
+        } ?: flowOf(emptyList())
+    }
 
     /**
-     * Id of the remote participant currently talking (null when nobody is). Driven by
-     * real audio levels on live calls and simulated in demo mode, so the UI can keep
-     * the active speaker in the main grid.
+     * Id of the participant currently talking, or null. Driven by real audio levels on
+     * live meetings and simulated in demo mode, so the UI can keep the speaker on screen.
      */
-    val speaker: Flow<String?>
-        get() = manager?.speakerId ?: flowOf(null)
+    val speaker: Flow<String?> = managerFlow.flatMapLatest { manager ->
+        manager?.speakerId ?: flowOf(null)
+    }
+
+    /** Authoritative local mic/camera state. Bind controls to this, not to a local mirror. */
+    val localMedia: Flow<LocalMediaState> = managerFlow.flatMapLatest { manager ->
+        manager?.localMedia ?: flowOf(LocalMediaState())
+    }
 
     /** Non-fatal errors worth surfacing (signaling drops, media failures). */
-    val errors: Flow<String>
-        get() = manager?.errors ?: emptyFlow()
+    val errors: Flow<String> = managerFlow.flatMapLatest { manager ->
+        manager?.errors ?: emptyFlow()
+    }
 
-    // ---- Media toggles ----------------------------------------------------------
+    // ---- Controls ---------------------------------------------------------------
 
-    fun toggleMic() = manager?.toggleMic()
-    fun toggleCamera() = manager?.toggleCamera()
-    fun switchCamera() = manager?.switchCamera()
+    fun toggleMic() = meshManager?.toggleMic()
+    fun toggleCamera() = meshManager?.toggleCamera()
+    fun switchCamera() = meshManager?.switchCamera()
+    fun setMic(enabled: Boolean) = meshManager?.setMic(enabled)
+    fun setCamera(enabled: Boolean) = meshManager?.setCamera(enabled)
 
     // ---- Teardown ---------------------------------------------------------------
 
-    /** Leave the current room and free resources. Safe to call repeatedly. */
+    /** Leave the current meeting and free resources. Safe to call repeatedly. */
     fun leave() {
-        manager?.leave()
-        manager = null
-        _stateFlow = flowOf(MeshCallState.IDLE)
-        _connectedFlow = flowOf(false)
+        // destroy(), not leave(): the manager owns a CoroutineScope that leave() alone
+        // would leave running for the lifetime of the process.
+        managerFlow.value?.destroy()
+        managerFlow.value = null
+        currentMeetingId = null
     }
 
-    /** Leave + release the instance. Call once from Activity/Fragment onDestroy. */
-    fun dispose() {
-        leave()
-        scope.cancel()
-    }
+    /** Leave + release the instance. Call once from the host's onDestroy. */
+    fun dispose() = leave()
 
-    private fun mapState(value: MeshCallManager.RoomState): MeshCallState = when (value) {
-        is MeshCallManager.RoomState.Active -> MeshCallState.CONNECTED
-        else -> MeshCallState.IDLE
+    private val userId: String
+        get() = LocalIdentityProvider.userId ?: DEFAULT_ANON_ID
+
+    private companion object {
+        const val DEFAULT_ANON_ID = "anonymous"
     }
 }
 
 /** Publicly visible snapshot of one remote participant. */
-data class MeshRoomPeer(
+data class MeshParticipant(
     val id: String,
     val userName: String,
     val micEnabled: Boolean,
     val cameraEnabled: Boolean,
+    /** "new" | "connecting" | "connected" | "completed" | "disconnected" | "failed" | "closed" */
     val connectionState: String = "new",
 )
 
 /** High-level session status. */
-enum class MeshCallState { IDLE, CONNECTED }
+enum class MeetingState { IDLE, CONNECTED }
 
 /**
- * Simple identity hook so the SDK does not bake in an auth provider. Set it once at
- * application start; the value is used as this device's id in rooms.
+ * Identity hook, so the SDK does not bake in an auth provider. Set it once at application
+ * start; the value becomes this device's id in every meeting and decides who offers.
  */
 object LocalIdentityProvider {
     @Volatile

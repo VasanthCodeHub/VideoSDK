@@ -3,33 +3,36 @@ package dev.meshcall.sdk.internal.signaling
 import org.json.JSONObject
 
 /**
- * Explicit signaling message schema exchanged over the Socket.IO broker.
+ * The wire contract with the Socket.IO broker.
  *
- * The broker is a dumb relay: it receives a message on namespace `/room` and re-emits
- * it to the targeted peer (or broadcasts room membership). It never inspects SDP or
- * ICE payloads and never touches media bits — those flow directly between peers over
- * WebRTC, out of band.
+ * The broker is a dumb relay: it tracks who is in which meeting, forwards SDP/ICE/state
+ * packets between participants, and never inspects a payload or touches media — that
+ * flows directly peer-to-peer over WebRTC, out of band.
  *
- * Every message is a JSON object with at least a `type` field. The `Payload`
- * subclasses below mirror the JSON shape so the mesh engine can build/parse them
- * without a serializer dependency.
+ * Each message is a Socket.IO **event name** plus a flat JSON object. There is no
+ * `{type, payload}` envelope; the event name is the type.
  *
- * Wire contract (JSON):
- *   { "type": "join-room", "payload": { "roomId": "...", "userId": "...", "userName": "..." } }
- *   { "type": "peer-joined", "peer": { "id": "...", "userName": "..." }, "room": "..." }
- *   { "type": "peer-left", "peerId": "..." }
- *   { "type": "offer", "from": "...", "to": "...", "sdp": { "type": "offer", "sdp": "..." } }
- *   { "type": "answer", "from": "...", "to": "...", "sdp": { "type": "answer", "sdp": "..." } }
- *   { "type": "ice-candidate", "from": "...", "to": "...", "candidate": { "candidate": "...", "sdpMLineIndex": 0, "sdpMid": "0" } }
- *   { "type": "peer-state", "from": "...", "to": "...", "state": { "micEnabled": true, "cameraEnabled": true } }
- *   { "type": "error", "error": "...", "room": "..." }
+ * Client → server:
+ *   join-meeting   { meeting, userId, userName }
+ *   offer          { to, sdp: { type, sdp } }
+ *   answer         { to, sdp: { type, sdp } }
+ *   ice-candidate  { to, candidate: { candidate, sdpMLineIndex, sdpMid } }
+ *   peer-state     { state: { micEnabled, cameraEnabled } }        // `to` optional
+ *
+ * Server → client (the broker always injects `from`):
+ *   meeting-members { meeting, peers: [ { userId, userName } ] }
+ *   peer-joined     { userId, userName, meeting }
+ *   peer-left       { peerId }
+ *   offer / answer  { from, sdp: {...} }
+ *   ice-candidate   { from, candidate: {...} }
+ *   peer-state      { from, state: {...} }
+ *   error           { error }
+ *
+ * See README §3. Any change here must land in the same commit as the README update.
  */
-object SignalingSchema {
+internal object SignalingSchema {
 
-    // Jackson-less: tiny JSON helpers mirroring the exact wire shape.
-    const val KEY_TYPE = "type"
-    const val KEY_PAYLOAD = "payload"
-    const val KEY_ROOM = "room"
+    const val KEY_MEETING = "meeting"
     const val KEY_USER_ID = "userId"
     const val KEY_USER_NAME = "userName"
     const val KEY_FROM = "from"
@@ -41,7 +44,8 @@ object SignalingSchema {
     const val KEY_PEER_ID = "peerId"
     const val KEY_PEERS = "peers"
 
-    const val TYPE_JOIN_ROOM = "join-room"
+    const val TYPE_JOIN_MEETING = "join-meeting"
+    const val TYPE_MEETING_MEMBERS = "meeting-members"
     const val TYPE_PEER_JOINED = "peer-joined"
     const val TYPE_PEER_LEFT = "peer-left"
     const val TYPE_OFFER = "offer"
@@ -50,8 +54,8 @@ object SignalingSchema {
     const val TYPE_PEER_STATE = "peer-state"
     const val TYPE_ERROR = "error"
 
-    /** A peer known to the room (only ever via [RoomPeerInfo] in peer-joined). */
-    data class RoomPeerInfo(
+    /** One participant in the meeting roster snapshot. */
+    data class MeetingPeerInfo(
         val id: String,
         val userName: String,
     ) {
@@ -61,8 +65,8 @@ object SignalingSchema {
         }
 
         companion object {
-            fun fromJson(o: JSONObject): RoomPeerInfo =
-                RoomPeerInfo(o.optString(KEY_USER_ID), o.optString(KEY_USER_NAME))
+            fun fromJson(o: JSONObject): MeetingPeerInfo =
+                MeetingPeerInfo(o.optString(KEY_USER_ID), o.optString(KEY_USER_NAME))
         }
     }
 
@@ -77,7 +81,8 @@ object SignalingSchema {
         }
 
         companion object {
-            fun fromJson(o: JSONObject): SdpPayload = SdpPayload(o.optString("type"), o.optString("sdp"))
+            fun fromJson(o: JSONObject): SdpPayload =
+                SdpPayload(o.optString("type"), o.optString("sdp"))
         }
     }
 
@@ -103,7 +108,7 @@ object SignalingSchema {
         }
     }
 
-    /** Broadcast peer media state (so remote UIs can show "muted" indicators). */
+    /** Broadcast media state so remote UIs can show "muted" indicators. */
     data class PeerStatePayload(
         val micEnabled: Boolean,
         val cameraEnabled: Boolean,
@@ -115,7 +120,10 @@ object SignalingSchema {
 
         companion object {
             fun fromJson(o: JSONObject): PeerStatePayload =
-                PeerStatePayload(o.optBoolean("micEnabled", true), o.optBoolean("cameraEnabled", true))
+                PeerStatePayload(
+                    o.optBoolean("micEnabled", true),
+                    o.optBoolean("cameraEnabled", true),
+                )
         }
     }
 

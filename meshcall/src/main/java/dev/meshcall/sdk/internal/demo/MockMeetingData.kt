@@ -1,30 +1,22 @@
 package dev.meshcall.sdk.internal.demo
 
 /**
- * Mock data used by [MockSignalingClient] to simulate a populated room while the real
+ * Mock data used by [MockSignalingClient] to simulate a populated meeting while the real
  * Node.js broker is not running. Dev/demo only — never referenced by the production
- * signaling path (SocketIOSignalingClient).
+ * signaling path.
  */
-internal object MockRoomData {
+internal object MockMeetingData {
 
-    /** Pool of participant names the demo pulls from when simulating a crowded room. */
+    /** Pool of participant names the demo pulls from when simulating a crowded meeting. */
     val participants: List<String> = listOf(
-        "Alex",
-        "Priya",
-        "Marco",
-        "Zoe",
-        "Ravi",
-        "Lena",
-        "Omar",
-        "Mei",
-        "Ivan",
-        "Sofia",
+        "Alex", "Priya", "Marco", "Zoe", "Ravi",
+        "Lena", "Omar", "Mei", "Ivan", "Sofia",
     )
 
     /** Deterministic mock id per index so reconnects produce stable peer identities. */
     fun peerId(index: Int): String = "mock-peer-$index"
 
-    /** How many peers the room "starts with" before the call (roster prefill). */
+    /** How many peers the meeting "starts with" before we join (roster prefill). */
     const val PREFILL_PEERS = 2
 
     /** Per-peer stagger (ms) between simulated joins — mimics people tapping join. */

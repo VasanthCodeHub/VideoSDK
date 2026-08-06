@@ -10,12 +10,12 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/your_room_id"
+        android:text="@string/your_meeting_code"
         android:textColor="@color/on_surface_variant"
         android:textSize="13sp"/>
 
     <TextView
-        android:id="@+id/room_code"
+        android:id="@+id/meeting_code"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
@@ -31,7 +31,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:gravity="center"
-        android:text="@string/share_room_hint"
+        android:text="@string/share_meeting_hint"
         android:textColor="@color/on_surface_variant"
         android:textSize="13sp"/>
 
@@ -109,7 +109,7 @@
                 android:layout_height="52dp"
                 android:background="@drawable/bg_icon_circle"
                 android:backgroundTint="@color/primary"
-                android:contentDescription="@string/start_call"
+                android:contentDescription="@string/start_meeting"
                 android:scaleType="centerInside"
                 android:src="@drawable/ic_play"
                 app:tint="@color/on_primary"/>
@@ -118,7 +118,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="@string/start_call"
+                android:text="@string/start_meeting"
                 android:textColor="@color/on_surface_variant"
                 android:textSize="12sp"/>
         </LinearLayout>

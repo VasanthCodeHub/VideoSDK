@@ -3,26 +3,25 @@ package dev.meshcall.sdk.internal.signaling
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Thin, swappable signaling transport abstraction.
+ * Thin, swappable signaling transport.
  *
- * The mesh engine depends only on this interface — never on the concrete Socket.IO
+ * The mesh depends only on this interface — never on the concrete Socket.IO
  * implementation — so the broker can later be reached over a raw WebSocket, MQTT, or
- * Firebase without touching the WebRTC engine. The current production-path is
- * [SocketIOSignalingClient].
+ * anything else without touching the WebRTC engine. Production uses
+ * [SocketIOSignalingClient]; offline demo mode uses
+ * `dev.meshcall.sdk.internal.demo.MockSignalingClient`.
  *
- * Implementations MUST:
- *  - deliver all events on the same single-threaded dispatcher they were given (the
- *    mesh pipeline is confined), or document otherwise;
- *  - be symmetric in ordering: event order is preserved for a given peer pairing.
+ * Implementations MUST preserve event order for a given peer pairing — an `answer` that
+ * overtakes its `offer` breaks negotiation.
  */
-interface SignalingClient {
+internal interface SignalingClient {
 
-    /** Connect to the broker and join [roomId] under our own identity. */
-    suspend fun connect(roomId: String)
+    /** Connect to the broker and join [meetingId] under our own identity. */
+    suspend fun connect(meetingId: String)
 
     /**
-     * Push a message. `targetPeerId` is null for room-scoped broadcasts.
-     * Message payload is a JSON string already shaped by [SignalingSchema].
+     * Push a message. [targetPeerId] is null for meeting-wide broadcasts. [payload] is a
+     * JSON string already shaped by [SignalingSchema].
      */
     suspend fun sendMessage(msgType: String, targetPeerId: String?, payload: String)
 
@@ -33,17 +32,17 @@ interface SignalingClient {
     val events: Flow<SignalEvent>
 }
 
-/** Decoded, type-safe inbound event delivered to the mesh engine. */
-sealed class SignalEvent {
+/** Decoded, type-safe inbound event delivered to the mesh. */
+internal sealed class SignalEvent {
 
-    /** A peer announced they joined the room and are listening for our connection. */
+    /** A peer announced they joined the meeting and are listening for our connection. */
     data class PeerJoined(
         val peerId: String,
         val userName: String,
-        val roomId: String,
+        val meetingId: String,
     ) : SignalEvent()
 
-    /** A peer left the room (or the broker timed them out). */
+    /** A peer left the meeting (or the broker timed them out). */
     data class PeerLeft(val peerId: String) : SignalEvent()
 
     /** SDP offer from [fromId], targeted at us. */
@@ -58,24 +57,27 @@ sealed class SignalEvent {
         val candidate: SignalingSchema.IceCandidatePayload,
     ) : SignalEvent()
 
-    /** Broadcast media state change notification from [fromId]. */
+    /** Media state change broadcast by [fromId]. */
     data class PeerState(
         val fromId: String,
         val state: SignalingSchema.PeerStatePayload,
     ) : SignalEvent()
 
-    /** A peer started/stopped talking (demo simulation; real path uses audio levels). */
+    /** A peer started/stopped talking. Demo simulation only; the real path uses audio levels. */
     data class PeerSpeaking(
         val peerId: String,
         val speaking: Boolean,
     ) : SignalEvent()
 
-    /** The connected peer list snapshot after (re)joining the room. */
-    data class RoomSnapshot(val peers: List<SignalingSchema.RoomPeerInfo>, val roomId: String?) : SignalEvent()
+    /** Participant roster snapshot delivered after every (re)join. */
+    data class MeetingSnapshot(
+        val peers: List<SignalingSchema.MeetingPeerInfo>,
+        val meetingId: String?,
+    ) : SignalEvent()
 
-    /** Signing the wiring is healthy but the broker replied with a fault. */
+    /** The transport is healthy but the broker reported a fault. */
     data class ErrorReceived(val message: String) : SignalEvent()
 
-    /** Broker connection dropped (before auto-reconnect fired); mesh can prepare. */
+    /** Broker connection dropped (auto-reconnect will follow); the mesh can prepare. */
     data object SignalingDisconnected : SignalEvent()
 }

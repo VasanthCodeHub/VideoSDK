@@ -1,26 +1,26 @@
 package dev.meshcall.sdk.internal.signaling
 
+import dev.meshcall.sdk.internal.util.MeshLog
 import io.socket.client.IO
 import io.socket.client.Socket
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import org.json.JSONObject
+import java.util.ArrayDeque
 
 /**
- * Socket.IO signaling transport.
- *
- * Talks to a lightweight broker. Events:
- *   client→server : join-room, offer, answer, ice-candidate, peer-state
- *   server→client : peer-joined, peer-left, offer, answer, ice-candidate, peer-state,
- *                   room-members (roster snapshot after join/rejoin), error
+ * Socket.IO signaling transport. See [SignalingSchema] for the wire contract.
  *
  * Reconnection: socket.io-client-java reconnects with the backoff configured in
- * [createSocket]. On *every* connect — initial and each reconnect — we call
- * [rejoinAndSync] to re-emit join-room, so the broker re-broadcasts our presence and
- * replies with the current roster. That lets the mesh manager rebuild any links that
- * were torn down while the socket was dropped.
+ * [createSocket]. On *every* connect — initial and each reconnect — [rejoinAndSync]
+ * re-emits `join-meeting`, so the broker re-broadcasts our presence and replies with the
+ * current roster. That lets the mesh rebuild any links torn down while we were dropped.
+ *
+ * Outbound messages produced while the socket is down are queued rather than dropped.
+ * ICE candidates in particular are generated continuously by the gathering process and
+ * silently losing them during a brief reconnect leaves a link that never completes.
  */
-class SocketIOSignalingClient(
+internal class SocketIOSignalingClient(
     private val url: String,
     private val userId: String,
     private val userName: String,
@@ -30,23 +30,36 @@ class SocketIOSignalingClient(
     override val events = _events.asSharedFlow()
 
     @Volatile private var socket: Socket? = null
-    private var currentRoomId: String? = null
+    private var currentMeetingId: String? = null
 
-    override suspend fun connect(roomId: String) {
-        currentRoomId = roomId
-        // A fresh client instance is created per room session, so disconnect() clears
-        // all handler state and a previous socket is never reused here.
+    /** Messages produced while the socket was down, replayed in order on reconnect. */
+    private val pending = ArrayDeque<Pair<String, JSONObject>>()
+
+    override suspend fun connect(meetingId: String) {
+        currentMeetingId = meetingId
+        // A fresh client is created per session, so disconnect() clears all handler state
+        // and a previous socket is never reused here.
         val s = createSocket(url)
         socket = s
         wire(s)
-        // socket.io emits EVENT_CONNECT asynchronously; wire() handles presence + roster.
+        MeshLog.i(TAG) { "connecting to $url as $userId" }
         s.connect()
     }
 
     private fun wire(s: Socket) {
-        // Any (re)connect re-announces presence and pulls the roster.
-        s.on(Socket.EVENT_CONNECT) { rejoinAndSync(s) }
-        s.on(Socket.EVENT_DISCONNECT) { _events.tryEmit(SignalEvent.SignalingDisconnected) }
+        s.on(Socket.EVENT_CONNECT) {
+            MeshLog.i(TAG) { "connected" }
+            rejoinAndSync(s)
+            flushPending(s)
+        }
+        s.on(Socket.EVENT_DISCONNECT) {
+            MeshLog.w(TAG, "disconnected")
+            _events.tryEmit(SignalEvent.SignalingDisconnected)
+        }
+        s.on(Socket.EVENT_CONNECT_ERROR) { args ->
+            MeshLog.w(TAG, "connect error: ${args.firstOrNull()}")
+            _events.tryEmit(SignalEvent.SignalingDisconnected)
+        }
 
         s.on(SignalingSchema.TYPE_PEER_JOINED) { args ->
             args.firstOrNull()?.asJson()?.let { j ->
@@ -54,7 +67,7 @@ class SocketIOSignalingClient(
                     SignalEvent.PeerJoined(
                         j.optString(SignalingSchema.KEY_USER_ID),
                         j.optString(SignalingSchema.KEY_USER_NAME),
-                        j.optString(SignalingSchema.KEY_ROOM, currentRoomId.orEmpty()),
+                        j.optString(SignalingSchema.KEY_MEETING, currentMeetingId.orEmpty()),
                     ),
                 )
             }
@@ -70,7 +83,7 @@ class SocketIOSignalingClient(
                 _events.tryEmit(
                     SignalEvent.Offer(
                         j.optString(SignalingSchema.KEY_FROM),
-                        SignalingSchema.SdpPayload(sdp.optString("type"), sdp.optString("sdp")),
+                        SignalingSchema.SdpPayload.fromJson(sdp),
                     ),
                 )
             }
@@ -81,7 +94,7 @@ class SocketIOSignalingClient(
                 _events.tryEmit(
                     SignalEvent.Answer(
                         j.optString(SignalingSchema.KEY_FROM),
-                        SignalingSchema.SdpPayload(sdp.optString("type"), sdp.optString("sdp")),
+                        SignalingSchema.SdpPayload.fromJson(sdp),
                     ),
                 )
             }
@@ -92,11 +105,7 @@ class SocketIOSignalingClient(
                 _events.tryEmit(
                     SignalEvent.IceCandidate(
                         j.optString(SignalingSchema.KEY_FROM),
-                        SignalingSchema.IceCandidatePayload(
-                            c.optString("candidate"),
-                            c.optInt("sdpMLineIndex", -1),
-                            if (c.isNull("sdpMid")) null else c.optString("sdpMid"),
-                        ),
+                        SignalingSchema.IceCandidatePayload.fromJson(c),
                     ),
                 )
             }
@@ -107,38 +116,43 @@ class SocketIOSignalingClient(
                 _events.tryEmit(
                     SignalEvent.PeerState(
                         j.optString(SignalingSchema.KEY_FROM),
-                        SignalingSchema.PeerStatePayload(
-                            st.optBoolean("micEnabled", true),
-                            st.optBoolean("cameraEnabled", true),
-                        ),
+                        SignalingSchema.PeerStatePayload.fromJson(st),
                     ),
                 )
             }
         }
-        s.on(EVENT_ROOM_MEMBERS) { args ->
+        s.on(SignalingSchema.TYPE_MEETING_MEMBERS) { args ->
             args.firstOrNull()?.asJson()?.let { j ->
                 val peers = j.optJSONArray(SignalingSchema.KEY_PEERS)?.let { arr ->
                     (0 until arr.length()).mapNotNull { i ->
-                        arr.optJSONObject(i)?.let { o -> SignalingSchema.RoomPeerInfo.fromJson(o) }
+                        arr.optJSONObject(i)?.let(SignalingSchema.MeetingPeerInfo::fromJson)
                     }
                 } ?: emptyList()
-                _events.tryEmit(SignalEvent.RoomSnapshot(peers, j.optString(SignalingSchema.KEY_ROOM, null)))
+                MeshLog.i(TAG) { "roster: ${peers.size} peer(s)" }
+                _events.tryEmit(
+                    SignalEvent.MeetingSnapshot(
+                        peers,
+                        j.optString(SignalingSchema.KEY_MEETING, currentMeetingId.orEmpty()),
+                    ),
+                )
             }
         }
         s.on(SignalingSchema.TYPE_ERROR) { args ->
             args.firstOrNull()?.asJson()?.let { j ->
-                _events.tryEmit(SignalEvent.ErrorReceived(j.optString(SignalingSchema.KEY_ERROR)))
+                val message = j.optString(SignalingSchema.KEY_ERROR)
+                MeshLog.w(TAG, "broker error: $message")
+                _events.tryEmit(SignalEvent.ErrorReceived(message))
             }
         }
     }
 
-    /** Re-emit presence + request roster. Called on initial connect and every reconnect. */
+    /** Re-announce presence + request the roster. Fires on initial connect and every reconnect. */
     private fun rejoinAndSync(s: Socket) {
-        val room = currentRoomId ?: return
+        val meeting = currentMeetingId ?: return
         s.emit(
-            SignalingSchema.TYPE_JOIN_ROOM,
+            SignalingSchema.TYPE_JOIN_MEETING,
             JSONObject().apply {
-                put(SignalingSchema.KEY_ROOM, room)
+                put(SignalingSchema.KEY_MEETING, meeting)
                 put(SignalingSchema.KEY_USER_ID, userId)
                 put(SignalingSchema.KEY_USER_NAME, userName)
             },
@@ -146,22 +160,51 @@ class SocketIOSignalingClient(
     }
 
     override suspend fun sendMessage(msgType: String, targetPeerId: String?, payload: String) {
-        val s = socket
-        if (s == null || !s.connected()) return
         val o = try {
             JSONObject(payload)
         } catch (e: Exception) {
+            MeshLog.e(TAG, "malformed $msgType payload; dropped", e)
             return
         }
         if (targetPeerId != null) o.put(SignalingSchema.KEY_TO, targetPeerId)
+
+        val s = socket
+        if (s == null || !s.connected()) {
+            enqueue(msgType, o)
+            return
+        }
         s.emit(msgType, o)
     }
 
+    /** Buffer an outbound message until the socket is back, bounded so a long outage can't grow forever. */
+    private fun enqueue(msgType: String, payload: JSONObject) {
+        synchronized(pending) {
+            while (pending.size >= MAX_PENDING) pending.removeFirst()
+            pending.addLast(msgType to payload)
+        }
+        MeshLog.d(TAG) { "queued $msgType while offline (${pending.size} pending)" }
+    }
+
+    private fun flushPending(s: Socket) {
+        val drained = synchronized(pending) {
+            if (pending.isEmpty()) return
+            val copy = pending.toList()
+            pending.clear()
+            copy
+        }
+        MeshLog.i(TAG) { "flushing ${drained.size} queued message(s)" }
+        drained.forEach { (type, payload) -> s.emit(type, payload) }
+    }
+
     override suspend fun disconnect() {
-        socket?.disconnect()
-        socket?.off()
+        synchronized(pending) { pending.clear() }
+        socket?.let {
+            it.off()
+            it.disconnect()
+        }
         socket = null
-        currentRoomId = null
+        currentMeetingId = null
+        MeshLog.i(TAG) { "disconnected and released" }
     }
 
     private fun createSocket(url: String): Socket {
@@ -177,18 +220,20 @@ class SocketIOSignalingClient(
         return IO.socket(url, opts)
     }
 
-    private fun Any?.asJson(): JSONObject? =
-        when (this) {
-            is JSONObject -> this
-            is String -> try {
-                JSONObject(this)
-            } catch (e: Exception) {
-                null
-            }
-            else -> null
+    private fun Any?.asJson(): JSONObject? = when (this) {
+        is JSONObject -> this
+        is String -> try {
+            JSONObject(this)
+        } catch (e: Exception) {
+            null
         }
+        else -> null
+    }
 
-    companion object {
-        private const val EVENT_ROOM_MEMBERS = "room-members"
+    private companion object {
+        const val TAG = "Signaling"
+
+        /** Cap the offline queue; a long outage should not grow memory without bound. */
+        const val MAX_PENDING = 256
     }
 }

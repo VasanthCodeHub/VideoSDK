@@ -5,22 +5,22 @@ import android.util.AttributeSet
 import org.webrtc.SurfaceViewRenderer
 
 /**
- * Thin wrapper over a WebRTC [SurfaceViewRenderer] that the host layout places in
- * XML. The room view (see [MeshCallRoomView]) binds a local or remote [VideoTrack]
- * to one of these instances.
+ * Thin wrapper over a WebRTC [SurfaceViewRenderer].
  *
- * The EGL base context used for drawing is shared via the SDK's internal engine; a
- * consumer never touches EGL directly. Add an instance to a layout with:
+ * [MeshParticipantGrid] binds a local or remote video track to one of these per tile, and
+ * initializes it against the SDK's shared EGL context — a consumer never touches EGL
+ * directly. Usually you get these for free from [MeshMeetingView]; declare one yourself
+ * only when building a custom meeting screen:
  *
  * ```
  * <dev.meshcall.sdk.ui.MeshVideoRenderer
  *     android:id="@+id/local_preview"
  *     android:layout_width="match_parent"
- *     android:layout_height="match_parent"
- *     android:scaleType="centerCrop" />
+ *     android:layout_height="match_parent" />
  * ```
  *
- * ComponentId: sdk.ui.meshvideorenderer
+ * Never give one an `elevation`, an opaque background, or `clipToOutline` in XML — the
+ * background composites above the video surface and hides it (README §7 rule 6).
  */
 class MeshVideoRenderer @JvmOverloads constructor(
     context: Context,
