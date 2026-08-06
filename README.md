@@ -371,6 +371,12 @@ Mandatory, not suggestions.
    and toggle with `setEnabled` + start/stopCapture.
 10. Putting a background on a scroll container that wraps a toggled child leaves an empty
     floating pill when the child is `GONE`. Style the child instead.
+11. §4 payloads nest: `{ to, sdp: { type, sdp } }`, not `{ to, type, sdp }`. Emitting them
+    flat put a raw SDP **string** where the receiver's `optJSONObject("sdp")` expected an
+    object, so `?: return` silently discarded every offer, answer, ICE candidate, and
+    peer-state. Meetings connected, exchanged nothing, and logged no error. Parsing a
+    required field must **log on failure** — a silent `return` here is indistinguishable
+    from a network problem and sends you hunting ICE, TURN, and camera code for hours.
 
 ---
 
