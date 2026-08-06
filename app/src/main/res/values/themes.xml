@@ -36,6 +36,13 @@
     <style name="Widget.VideoCall.PillButton" parent="Widget.Material3.Button">
         <item name="android:minHeight">64dp</item>
         <item name="android:minWidth">0dp</item>
+        <!--
+            Pinned so the icon lands at the same x in both the filled and outlined
+            variants: with iconGravity="start" the icon is laid out from paddingStart,
+            and the two Material3 parents do not guarantee the same default.
+        -->
+        <item name="android:paddingStart">24dp</item>
+        <item name="android:paddingEnd">24dp</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textSize">16sp</item>
@@ -49,6 +56,9 @@
     <style name="Widget.VideoCall.PillButton.Outlined" parent="Widget.Material3.Button.OutlinedButton">
         <item name="android:minHeight">64dp</item>
         <item name="android:minWidth">0dp</item>
+        <!-- Must match Widget.VideoCall.PillButton so the two icons stay aligned. -->
+        <item name="android:paddingStart">24dp</item>
+        <item name="android:paddingEnd">24dp</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textSize">16sp</item>

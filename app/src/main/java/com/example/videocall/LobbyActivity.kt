@@ -42,10 +42,6 @@ class LobbyActivity : AppCompatActivity() {
 
         binding.btnCreateMeeting.setOnClickListener { showCreateMeetingDialog() }
         binding.btnJoinMeeting.setOnClickListener { showJoinDialog() }
-        binding.btnAccount.setOnClickListener {
-            Toast.makeText(this, R.string.lobby_subtitle, Toast.LENGTH_SHORT).show()
-        }
-
         binding.recentMeetingsList.layoutManager = LinearLayoutManager(this)
         binding.recentMeetingsList.adapter = adapter
     }
@@ -89,8 +85,6 @@ class LobbyActivity : AppCompatActivity() {
 
     private fun showJoinDialog() {
         val dialogBinding = DialogJoinMeetingBinding.inflate(layoutInflater)
-        dialogBinding.etBroker.setText(DEFAULT_BROKER)
-
         val dialog = AlertDialog.Builder(this).setView(dialogBinding.root).create()
 
         dialogBinding.btnJoin.setOnClickListener {
@@ -100,10 +94,7 @@ class LobbyActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             dialog.dismiss()
-            startMeeting(
-                meetingCode = code,
-                broker = dialogBinding.etBroker.text.toString().trim(),
-            )
+            startMeeting(meetingCode = code)
         }
         dialog.show()
     }
@@ -125,11 +116,7 @@ class LobbyActivity : AppCompatActivity() {
         }
         dialogBinding.btnStart.setOnClickListener {
             dialog.dismiss()
-            startMeeting(
-                meetingCode = meetingCode,
-                broker = DEFAULT_BROKER,
-                title = title,
-            )
+            startMeeting(meetingCode = meetingCode, title = title)
         }
         dialog.show()
     }
@@ -147,14 +134,18 @@ class LobbyActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(send, getString(R.string.share_meeting_title)))
     }
 
+    /**
+     * The broker is infrastructure, not a user-facing choice, so it is never surfaced in
+     * the create or join dialogs. Overriding it is still possible for local development
+     * by launching [MainActivity] directly with `-e broker …` (see README).
+     */
     private fun startMeeting(
         meetingCode: String,
-        broker: String,
         title: String = "",
     ) {
         startActivity(
             Intent(this, MainActivity::class.java)
-                .putExtra(EXTRA_BROKER, broker.ifEmpty { DEFAULT_BROKER })
+                .putExtra(EXTRA_BROKER, DEFAULT_BROKER)
                 .putExtra(EXTRA_MEETING, meetingCode)
                 .putExtra(EXTRA_TITLE, title)
                 .putExtra(EXTRA_NAME, Build.MODEL),

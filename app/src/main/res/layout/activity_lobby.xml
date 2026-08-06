@@ -31,9 +31,9 @@
                 <ImageView
                     android:layout_width="28dp"
                     android:layout_height="28dp"
+                    android:layout_marginStart="16dp"
                     android:contentDescription="@string/app_brand"
-                    android:src="@drawable/ic_videocam"
-                    app:tint="@color/primary" />
+                    android:src="@drawable/soft" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -45,19 +45,6 @@
                     android:textSize="22sp"
                     android:textStyle="bold" />
 
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    android:layout_weight="1" />
-
-                <ImageButton
-                    android:id="@+id/btn_account"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/account"
-                    android:src="@drawable/ic_account_circle"
-                    app:tint="@color/on_surface_variant" />
             </LinearLayout>
         </com.google.android.material.appbar.MaterialToolbar>
 
@@ -82,7 +69,8 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
+                    android:orientation="vertical"
+                    android:layout_marginTop="35dp">
 
                     <!-- Row: Join Meeting (75% of screen width) -->
                     <LinearLayout
@@ -106,7 +94,7 @@
                             android:text="@string/join_meeting"
                             android:textAlignment="center"
                             app:icon="@drawable/ic_join"
-                            app:iconGravity="textStart"
+                            app:iconGravity="start"
                             app:iconPadding="8dp"
                             app:iconSize="24dp"
                             app:iconTint="@color/on_surface" />
@@ -140,7 +128,7 @@
                             android:text="@string/create_meeting"
                             android:textAlignment="center"
                             app:icon="@drawable/ic_create"
-                            app:iconGravity="textStart"
+                            app:iconGravity="start"
                             app:iconPadding="8dp"
                             app:iconSize="24dp"
                             app:iconTint="@color/on_primary" />
@@ -152,18 +140,11 @@
                     </LinearLayout>
                 </LinearLayout>
 
-                <!-- Divider -->
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginTop="32dp"
-                    android:background="@color/outline_variant" />
-
                 <!-- Recent Meetings Section -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="32dp"
+                    android:layout_marginTop="40dp"
                     android:orientation="vertical">
 
                     <LinearLayout
