@@ -9,10 +9,12 @@
     <string name="desc_share">Share screen</string>
     <string name="desc_more">More options</string>
     <string name="desc_secured">Encrypted call</string>
-    <string name="desc_you_pin">You</string>
-    <string name="you_label">You</string>
     <string name="share_coming_soon">Screen sharing is coming soon</string>
     <string name="more_coming_soon">More options are coming soon</string>
+    <string name="end_call_title">End call?</string>
+    <string name="end_call_message">Are you sure you want to leave the meeting?</string>
+    <string name="end_call_leave">End Call</string>
+    <string name="cancel">Cancel</string>
 
     <string name="lobby_subtitle">Create a room to start a call, or join one with a shared Room ID.</string>
     <string name="create_room">Create Room</string>

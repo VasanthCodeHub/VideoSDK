@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/background">
@@ -79,42 +80,74 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:orientation="vertical">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_join_meeting"
-                        style="@style/Widget.VideoCall.PillButton.Outlined"
-                        android:layout_width="0dp"
-                        android:layout_height="64dp"
-                        android:layout_marginEnd="8dp"
-                        android:layout_weight="1"
-                        android:insetBottom="0dp"
-                        android:insetTop="0dp"
-                        android:text="@string/join_meeting"
-                        android:textAlignment="center"
-                        app:icon="@drawable/ic_keyboard"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp"
-                        app:iconSize="24dp"
-                        app:iconTint="@color/on_surface" />
+                    <!-- Row: Join Meeting (75% of screen width) -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_create_meeting"
-                        style="@style/Widget.VideoCall.PillButton"
-                        android:layout_width="0dp"
-                        android:layout_height="64dp"
-                        android:layout_marginStart="8dp"
-                        android:layout_weight="1"
-                        android:insetBottom="0dp"
-                        android:insetTop="0dp"
-                        android:text="@string/create_meeting"
-                        android:textAlignment="center"
-                        app:icon="@drawable/ic_video_call"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp"
-                        app:iconSize="24dp"
-                        app:iconTint="@color/on_primary" />
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="1dp"
+                            android:layout_weight="1" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_join_meeting"
+                            style="@style/Widget.VideoCall.PillButton.Outlined"
+                            android:layout_width="0dp"
+                            android:layout_height="64dp"
+                            android:layout_weight="6"
+                            android:insetBottom="0dp"
+                            android:insetTop="0dp"
+                            android:text="@string/join_meeting"
+                            android:textAlignment="center"
+                            app:icon="@drawable/ic_keyboard"
+                            app:iconGravity="textStart"
+                            app:iconPadding="8dp"
+                            app:iconSize="24dp"
+                            app:iconTint="@color/on_surface" />
+
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="1dp"
+                            android:layout_weight="1" />
+                    </LinearLayout>
+
+                    <!-- Row: Create Meeting (75% of screen width) -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:orientation="horizontal">
+
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="1dp"
+                            android:layout_weight="1" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_create_meeting"
+                            style="@style/Widget.VideoCall.PillButton"
+                            android:layout_width="0dp"
+                            android:layout_height="64dp"
+                            android:layout_weight="6"
+                            android:insetBottom="0dp"
+                            android:insetTop="0dp"
+                            android:text="@string/create_meeting"
+                            android:textAlignment="center"
+                            app:icon="@drawable/ic_video_call"
+                            app:iconGravity="textStart"
+                            app:iconPadding="8dp"
+                            app:iconSize="24dp"
+                            app:iconTint="@color/on_primary" />
+
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="1dp"
+                            android:layout_weight="1" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <!-- Divider -->

@@ -64,6 +64,12 @@ sealed class SignalEvent {
         val state: SignalingSchema.PeerStatePayload,
     ) : SignalEvent()
 
+    /** A peer started/stopped talking (demo simulation; real path uses audio levels). */
+    data class PeerSpeaking(
+        val peerId: String,
+        val speaking: Boolean,
+    ) : SignalEvent()
+
     /** The connected peer list snapshot after (re)joining the room. */
     data class RoomSnapshot(val peers: List<SignalingSchema.RoomPeerInfo>, val roomId: String?) : SignalEvent()
 

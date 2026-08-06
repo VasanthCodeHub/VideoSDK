@@ -75,22 +75,26 @@
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">32dp</item>
     </style>
-
-    <!-- Rounded-pill FAB used for the end-call button in the floating control bar -->
-    <style name="ShapeAppearance.VideoCall.EndPill" parent="ShapeAppearance.Material3.LargeComponent">
+    <!-- Perfect-circle FAB shape for every button in the floating control bar -->
+    <style name="ShapeAppearance.VideoCall.Circle" parent="ShapeAppearance.Material3.LargeComponent">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">28dp</item>
+        <item name="cornerSize">50%</item>
     </style>
 
+    <!-- OneUI-style dialog: rounded surface, elevated, dimmed scrim -->
     <style name="ThemeOverlay.VideoCall.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="colorSurface">@color/surface_container</item>
         <item name="colorOnSurface">@color/on_surface</item>
         <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
         <item name="colorPrimary">@color/primary</item>
         <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="android:windowBackground">@drawable/dialog_bg</item>
+        <item name="android:windowElevation">@dimen/m3_sys_elevation_level3</item>
+        <item name="android:backgroundDimAmount">0.6</item>
     </style>
 
     <style name="Theme.VideoCall" parent="Base.Theme.VideoCall">
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.VideoCall.Dialog</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.VideoCall.Dialog</item>
     </style>
 </resources>

@@ -124,6 +124,14 @@ class MeshCall(context: Context) {
             }
         } ?: emptyFlow()
 
+    /**
+     * Id of the remote participant currently talking (null when nobody is). Driven by
+     * real audio levels on live calls and simulated in demo mode, so the UI can keep
+     * the active speaker in the main grid.
+     */
+    val speaker: Flow<String?>
+        get() = manager?.speakerId ?: flowOf(null)
+
     /** Non-fatal errors worth surfacing (signaling drops, media failures). */
     val errors: Flow<String>
         get() = manager?.errors ?: emptyFlow()

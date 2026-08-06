@@ -43,6 +43,7 @@ internal class MockSignalingClient(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var churnJob: Job? = null
+    private var speakerJob: Job? = null
 
     private val _events = MutableSharedFlow<SignalEvent>(replay = 16, extraBufferCapacity = 64)
     override val events = _events.asSharedFlow()
@@ -74,6 +75,32 @@ internal class MockSignalingClient(
         }
 
         startStateChurn(roomId)
+        startSpeakerChurn()
+    }
+
+    /**
+     * Simulate a rotating speaker so the "active speaker moves into the main grid"
+     * behavior can be demoed offline. Picks a random peer (frequently one that is
+     * currently sitting in the overflow strip), has them "talk" for a while, then
+     * hands the mic to someone else.
+     */
+    private fun startSpeakerChurn() {
+        speakerJob?.cancel()
+        speakerJob = scope.launch {
+            var current: String? = null
+            while (true) {
+                delay(MockRoomData.SPEAKING_GAP_MS)
+                current?.let {
+                    _events.emit(SignalEvent.PeerSpeaking(it, false))
+                }
+                val peersInRoom = joined.keys.toList().filter { it != userId }
+                if (peersInRoom.isEmpty()) continue
+                val next = peersInRoom.random()
+                current = next
+                _events.emit(SignalEvent.PeerSpeaking(next, true))
+                delay(MockRoomData.SPEAKING_ON_MS)
+            }
+        }
     }
 
     /** Randomly mute/unmute a peer so badges + participant list react live. */
@@ -106,6 +133,8 @@ internal class MockSignalingClient(
     override suspend fun disconnect() {
         churnJob?.cancel()
         churnJob = null
+        speakerJob?.cancel()
+        speakerJob = null
         joined.clear()
         scope.cancel()
     }

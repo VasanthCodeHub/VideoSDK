@@ -1,6 +1,7 @@
 package dev.meshcall.sdk.internal.mesh
 
 import android.content.Context
+import android.os.SystemClock
 import dev.meshcall.sdk.internal.media.MediaConfig
 import dev.meshcall.sdk.internal.signaling.SignalEvent
 import dev.meshcall.sdk.internal.signaling.SignalingClient
@@ -12,16 +13,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import org.webrtc.AudioTrackSink
 import org.webrtc.EglBase
 import org.webrtc.MediaStream
 import org.webrtc.SessionDescription
 import org.webrtc.VideoTrack
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.sqrt
 
 /**
  * Coordinates signaling, the WebRTC mesh, and local media for one room session.
@@ -55,6 +60,24 @@ internal class MeshCallManager(
     // Tracks the last known media state per peer so roster rebuilds don't drop the
     // "muted" indicators a peer sent us over the peer-state broadcast.
     private val remoteMedia = HashMap<String, Pair<Boolean, Boolean>>()
+
+    // ---- Active-speaker detection ----------------------------------------------
+    // Real path: RMS levels computed from each remote audio track (AudioTrackSink);
+    // demo path: SignalEvent.PeerSpeaking emitted by the mock client. Both funnel
+    // into _speakerId, which drives the "speaker moves into the main grid" UX.
+
+    /** Last RMS (0..1) per peer, written on the WebRTC audio thread. */
+    private val speakerLevels = ConcurrentHashMap<String, Float>()
+
+    /** Registered sinks per peer so they can be detached when a stream is removed. */
+    private val audioSinks = HashMap<String, AudioTrackSink>()
+
+    private var lastSpeakerActiveAt = 0L
+    private var speakerJob: Job? = null
+
+    private val _speakerId = MutableStateFlow<String?>(null)
+    /** Peer currently talking (null when nobody is). */
+    val speakerId = _speakerId.asStateFlow()
 
     // ---- Observable state ------------------------------------------------------
     private val _roomState = MutableStateFlow<RoomState>(RoomState.Idle)
@@ -132,6 +155,7 @@ internal class MeshCallManager(
             // Publish engine media (in-bound tracks) to the view layer.
             scope.launch {
                 eng.remoteStreams.collect { update: MeshWebRtcEngine.RemoteStreamUpdate ->
+                    attachSpeakerSink(update.peerId, update.stream)
                     _mediaStreams.tryEmit(MediaEvent.RemoteStreamChanged(update.peerId, update.stream))
                 }
             }
@@ -144,6 +168,69 @@ internal class MeshCallManager(
 
             s.connect(roomId)
         }
+
+        startSpeakerSampler()
+    }
+
+    /**
+     * Sample the per-peer RMS levels every 300 ms; the loudest peer above the
+     * threshold is the active speaker. The speaker id is held for a short silence
+     * window so bursts of background noise don't flicker the UI.
+     */
+    private fun startSpeakerSampler() {
+        speakerJob?.cancel()
+        lastSpeakerActiveAt = SystemClock.elapsedRealtime()
+        speakerJob = scope.launch {
+            while (true) {
+                delay(SPEAKER_SAMPLE_MS)
+                val now = SystemClock.elapsedRealtime()
+                val best = speakerLevels.maxByOrNull { it.value }
+                if (best != null && best.value > SPEAKER_THRESHOLD) {
+                    lastSpeakerActiveAt = now
+                    if (_speakerId.value != best.key) _speakerId.value = best.key
+                } else if (now - lastSpeakerActiveAt > SPEAKER_HOLD_MS) {
+                    if (_speakerId.value != null) _speakerId.value = null
+                }
+            }
+        }
+    }
+
+    /** Attach an audio-level sink to a peer's remote audio track (real calls only). */
+    private fun attachSpeakerSink(peerId: String, stream: MediaStream?) {
+        detachSpeakerSink(peerId)
+        speakerLevels.remove(peerId)
+        val track = stream?.audioTracks?.firstOrNull() ?: return
+        val sink = AudioTrackSink { data, _, _, _, _, _ ->
+            speakerLevels[peerId] = rmsLevel(data)
+        }
+        audioSinks[peerId] = sink
+        try {
+            track.addSink(sink)
+        } catch (_: Exception) {
+            audioSinks.remove(peerId)
+        }
+    }
+
+    /** Detach a peer's audio-level sink when their stream goes away. */
+    private fun detachSpeakerSink(peerId: String) {
+        val sink = audioSinks.remove(peerId) ?: return
+        speakerLevels.remove(peerId)
+        // The owning track is disposed by the engine; the sink is inert once the
+        // peer is gone, so dropping the reference is sufficient.
+    }
+
+    /** Compute normalized RMS (0..1) from a raw PCM16 buffer. */
+    private fun rmsLevel(buffer: java.nio.ByteBuffer): Float {
+        val pcm = buffer.duplicate()
+        var sum = 0.0
+        var count = 0
+        while (pcm.remaining() >= 2) {
+            val sample = pcm.short.toInt()
+            sum += sample.toLong() * sample
+            count++
+        }
+        if (count == 0) return 0f
+        return (sqrt(sum / count) / 32767.0).toFloat().coerceIn(0f, 1f)
     }
 
     /** Route one inbound signaling event into the mesh. */
@@ -206,6 +293,13 @@ internal class MeshCallManager(
                 remoteNames.getOrPut(event.fromId) { event.fromId }
                 remoteMedia[event.fromId] = Pair(event.state.micEnabled, event.state.cameraEnabled)
                 publishPeers()
+            }
+            is SignalEvent.PeerSpeaking -> {
+                if (event.speaking) {
+                    _speakerId.value = event.peerId
+                } else if (_speakerId.value == event.peerId) {
+                    _speakerId.value = null
+                }
             }
             is SignalEvent.SignalingDisconnected -> {
                 _signalingConnected.value = false
@@ -319,6 +413,11 @@ internal class MeshCallManager(
      * Leave the room and free everything. Safe to call more than once.
      */
     fun leave() {
+        speakerJob?.cancel()
+        speakerJob = null
+        audioSinks.clear()
+        speakerLevels.clear()
+        _speakerId.value = null
         signalingJob?.cancel()
         signalingJob = null
         scope.launch {
@@ -366,6 +465,17 @@ internal class MeshCallManager(
         data class RemoteStreamAdded(val peerId: String) : MediaEvent()
         data class RemoteStreamRemoved(val peerId: String) : MediaEvent()
         data class RemoteStreamChanged(val peerId: String, val stream: MediaStream?) : MediaEvent()
+    }
+
+    private companion object {
+        /** Sample interval (ms) for audio-level based speaker detection. */
+        const val SPEAKER_SAMPLE_MS = 300L
+
+        /** RMS (0..1) above which a peer counts as talking. */
+        const val SPEAKER_THRESHOLD = 0.05f
+
+        /** How long (ms) of quiet before the speaker indicator is cleared. */
+        const val SPEAKER_HOLD_MS = 1_500L
     }
 }
 

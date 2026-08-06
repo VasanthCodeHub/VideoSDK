@@ -11,4 +11,7 @@
     <string name="meshcall_status_connected">Connected</string>
     <string name="meshcall_status_failed">Failed</string>
     <string name="meshcall_status_muted">Muted</string>
+    <string name="meshcall_pin_participant">Pin participant</string>
+    <string name="meshcall_unpin_participant">Unpin participant</string>
+    <string name="meshcall_you">You</string>
 </resources>

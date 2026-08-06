@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.os.Bundle
 import android.os.SystemClock
+import android.os.Build
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -17,8 +18,11 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import dev.meshcall.sdk.api.LocalIdentityProvider
@@ -51,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     // Mirrors of the last toggles so the FAB tint can flip (independent of broker).
     private var micOn = true
     private var camOn = true
+    private var overflowLabel: TextView? = null
 
     private val permissions =
         arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
@@ -68,12 +73,15 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        fitTopSafeArea()
+
         findViewById<FloatingActionButton>(R.id.btn_mic).setOnClickListener {
             micOn = !micOn
             val btn = findViewById<FloatingActionButton>(R.id.btn_mic)
             btn.setImageResource(if (micOn) R.drawable.ic_mic else R.drawable.ic_mic_off)
             btn.backgroundTintList = if (micOn) null else ColorStateList.valueOf(0xFFDC2626.toInt())
             call?.toggleMic()
+            roomView?.setLocalMediaState(micOn, camOn)
         }
         findViewById<FloatingActionButton>(R.id.btn_camera).setOnClickListener {
             camOn = !camOn
@@ -81,6 +89,7 @@ class MainActivity : AppCompatActivity() {
             btn.setImageResource(if (camOn) R.drawable.ic_videocam_on else R.drawable.ic_videocam_off)
             btn.backgroundTintList = if (camOn) null else ColorStateList.valueOf(0xFFDC2626.toInt())
             call?.toggleCamera()
+            roomView?.setLocalMediaState(micOn, camOn)
         }
         findViewById<FloatingActionButton>(R.id.btn_share).setOnClickListener {
             Toast.makeText(this, R.string.share_coming_soon, Toast.LENGTH_SHORT).show()
@@ -90,9 +99,16 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<ImageButton>(R.id.btn_switch_cam).setOnClickListener { call?.switchCamera() }
         findViewById<FloatingActionButton>(R.id.btn_end).setOnClickListener {
-            roomView?.release()
-            call?.leave()
-            finish()
+            AlertDialog.Builder(this)
+                .setTitle(R.string.end_call_title)
+                .setMessage(R.string.end_call_message)
+                .setPositiveButton(R.string.end_call_leave) { _, _ ->
+                    roomView?.release()
+                    call?.leave()
+                    finish()
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
         }
         findViewById<ImageButton>(R.id.btn_participants).setOnClickListener {
             toggleParticipants()
@@ -114,6 +130,16 @@ class MainActivity : AppCompatActivity() {
         if (missing.isEmpty()) startCall() else permissionLauncher.launch(permissions)
     }
 
+    private fun fitTopSafeArea() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
+        val root = findViewById<View>(R.id.root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val top = insets.getInsets(WindowInsetsCompat.Type.systemBars()).top
+            view.setPadding(0, top, 0, 0)
+            insets
+        }
+    }
+
     private fun startCall() {
         val demo = intent.getBooleanExtra(EXTRA_DEMO, false)
         val broker = intent.getStringExtra(BROKER_EXTRA) ?: DEFAULT_BROKER
@@ -127,8 +153,13 @@ class MainActivity : AppCompatActivity() {
         LocalIdentityProvider.userId = "$name-${System.currentTimeMillis()}"
 
         val container = findViewById<FrameLayout>(R.id.call_container)
-        val view = MeshCallRoomView(this, container)
+        val overflow = findViewById<LinearLayout>(R.id.overflow_strip)
+        val view = MeshCallRoomView(this, container, overflow)
         roomView = view
+        view.onPinRequest = { id ->
+            view.setPinned(if (view.pinnedPeerId == id) null else id)
+        }
+        overflowLabel = findViewById<TextView>(R.id.overflow_label)
 
         val mesh = MeshCall(applicationContext)
         call = mesh
@@ -138,6 +169,10 @@ class MainActivity : AppCompatActivity() {
             mesh.join(brokerUrl = broker, roomId = room, displayName = name)
         }
         view.bind(mesh)
+
+        lifecycleScope.launch {
+            mesh.speaker.collect { speakerId -> view.setSpeaker(speakerId) }
+        }
 
         lifecycleScope.launch {
             mesh.errors.collect { err ->

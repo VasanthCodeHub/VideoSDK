@@ -12,6 +12,8 @@ import android.widget.Toast
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.button.MaterialButton
 import java.security.SecureRandom
 
@@ -25,6 +27,8 @@ class LobbyActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_lobby)
+
+        fitTopSafeArea()
 
         findViewById<MaterialButton>(R.id.btn_create_meeting).setOnClickListener {
             val roomId = generateRoomId()
@@ -45,6 +49,16 @@ class LobbyActivity : AppCompatActivity() {
         }
 
         findViewById<View>(R.id.btn_account).setOnClickListener { navigateSnippet() }
+    }
+
+    private fun fitTopSafeArea() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
+        val root = findViewById<View>(R.id.root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val top = insets.getInsets(WindowInsetsCompat.Type.systemBars()).top
+            view.setPadding(0, top, 0, 0)
+            insets
+        }
     }
 
     private fun showJoinDialog() {

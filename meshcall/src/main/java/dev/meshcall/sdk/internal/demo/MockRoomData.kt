@@ -32,4 +32,10 @@ internal object MockRoomData {
 
     /** Interval (ms) at which the simulator flips a random peer's media state. */
     const val STATE_CHURN_MS = 6_000L
+
+    /** How long (ms) a simulated peer "talks" before stopping. */
+    const val SPEAKING_ON_MS = 3_000L
+
+    /** Interval (ms) between two simulated speakers starting to talk. */
+    const val SPEAKING_GAP_MS = 4_500L
 }

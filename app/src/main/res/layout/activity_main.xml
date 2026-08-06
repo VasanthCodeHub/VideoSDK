@@ -1,63 +1,93 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000">
+    android:background="#000"
+    android:orientation="vertical">
 
-    <!-- Remote video grid (populated by MeshCallRoomView) + floating local preview -->
+    <!-- Remote video grid (populated by MeshCallRoomView) + local preview.
+         The local preview is wrapped into the "You" grid tile by MeshCallRoomView. -->
     <FrameLayout
         android:id="@+id/call_container"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
-        <FrameLayout
-            android:id="@+id/local_pip"
-            android:layout_width="110dp"
-            android:layout_height="160dp"
+        <dev.meshcall.sdk.ui.MeshVideoRenderer
+            android:id="@+id/local_preview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <!-- Signaling connection banner -->
+        <TextView
+            android:id="@+id/banner_conn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_banner_red"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="6dp"
+            android:text="@string/connecting_banner"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <!-- Participants overlay -->
+        <LinearLayout
+            android:id="@+id/panel_participants"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_gravity="top|end"
-            android:layout_margin="16dp"
-            android:background="@drawable/bg_pip_tile"
-            android:clipToOutline="true">
-
-            <dev.meshcall.sdk.ui.MeshVideoRenderer
-                android:id="@+id/local_preview"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@drawable/bg_pip_tile"
-                android:clipToOutline="true"
-                android:outlineProvider="background" />
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/bg_panel"
+            android:orientation="vertical"
+            android:padding="12dp"
+            android:visibility="gone">
 
             <TextView
-                android:id="@+id/lbl_you"
+                android:id="@+id/txtParticipantsTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="bottom|start"
-                android:layout_margin="6dp"
-                android:background="@drawable/bg_chip_glass"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="4dp"
-                android:text="@string/you_label"
                 android:textColor="#FFFFFFFF"
-                android:textSize="12sp" />
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
-            <FrameLayout
-                android:id="@+id/pin_badge"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_gravity="bottom|end"
-                android:layout_margin="6dp"
-                android:background="@drawable/bg_pin_glass">
+            <LinearLayout
+                android:id="@+id/list_participants"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="vertical" />
+        </LinearLayout>
 
-                <ImageView
-                    android:layout_width="14dp"
-                    android:layout_height="14dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="@string/desc_you_pin"
-                    android:src="@drawable/ic_push_pin"
-                    app:tint="#FFFFFFFF" />
-            </FrameLayout>
-        </FrameLayout>
+        <!-- Overflow participants (5th+): compact strip above the control bar -->
+        <LinearLayout
+            android:id="@+id/overflow_strip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_glass_bar"
+            android:elevation="10dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="6dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/overflow_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="2dp"
+                android:textColor="#99FFFFFF"
+                android:textSize="10sp"
+                android:visibility="gone" />
+        </LinearLayout>
     </FrameLayout>
 
     <!-- Header: room title, live timer, group + flip-camera actions -->
@@ -144,56 +174,12 @@
             android:background="#26262B" />
     </LinearLayout>
 
-    <!-- Signaling connection banner -->
-    <TextView
-        android:id="@+id/banner_conn"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="64dp"
-        android:background="@drawable/bg_banner_red"
-        android:paddingHorizontal="14dp"
-        android:paddingVertical="6dp"
-        android:text="@string/connecting_banner"
-        android:textColor="@android:color/white"
-        android:textSize="12sp"
-        android:visibility="gone" />
-
-    <!-- Participants overlay -->
-    <LinearLayout
-        android:id="@+id/panel_participants"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|end"
-        android:layout_marginTop="64dp"
-        android:layout_marginEnd="16dp"
-        android:background="@drawable/bg_panel"
-        android:orientation="vertical"
-        android:padding="12dp"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/txtParticipantsTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#FFFFFFFF"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-
-        <LinearLayout
-            android:id="@+id/list_participants"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:orientation="vertical" />
-    </LinearLayout>
-
     <!-- Floating glass control bar -->
     <LinearLayout
         android:id="@+id/controls"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
+        android:layout_gravity="center_horizontal"
         android:layout_marginBottom="20dp"
         android:background="@drawable/bg_glass_bar"
         android:elevation="12dp"
@@ -212,7 +198,8 @@
             app:borderWidth="0dp"
             app:elevation="0dp"
             app:maxImageSize="24dp"
-            app:pressedTranslationZ="0dp" />
+            app:pressedTranslationZ="0dp"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.VideoCall.Circle" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btn_camera"
@@ -226,7 +213,8 @@
             app:borderWidth="0dp"
             app:elevation="0dp"
             app:maxImageSize="24dp"
-            app:pressedTranslationZ="0dp" />
+            app:pressedTranslationZ="0dp"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.VideoCall.Circle" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btn_share"
@@ -240,7 +228,8 @@
             app:borderWidth="0dp"
             app:elevation="0dp"
             app:maxImageSize="24dp"
-            app:pressedTranslationZ="0dp" />
+            app:pressedTranslationZ="0dp"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.VideoCall.Circle" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btn_more"
@@ -254,11 +243,12 @@
             app:borderWidth="0dp"
             app:elevation="0dp"
             app:maxImageSize="24dp"
-            app:pressedTranslationZ="0dp" />
+            app:pressedTranslationZ="0dp"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.VideoCall.Circle" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btn_end"
-            android:layout_width="72dp"
+            android:layout_width="56dp"
             android:layout_height="56dp"
             android:layout_marginStart="12dp"
             android:contentDescription="@string/desc_end"
@@ -269,7 +259,7 @@
             app:elevation="0dp"
             app:maxImageSize="24dp"
             app:pressedTranslationZ="0dp"
-            app:shapeAppearanceOverlay="@style/ShapeAppearance.VideoCall.EndPill" />
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.VideoCall.Circle" />
     </LinearLayout>
 
-</FrameLayout>
+</LinearLayout>
