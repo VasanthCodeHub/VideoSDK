@@ -7,9 +7,8 @@ import kotlinx.coroutines.flow.Flow
  *
  * The mesh depends only on this interface — never on the concrete Socket.IO
  * implementation — so the broker can later be reached over a raw WebSocket, MQTT, or
- * anything else without touching the WebRTC engine. Production uses
- * [SocketIOSignalingClient]; offline demo mode uses
- * `dev.meshcall.sdk.internal.demo.MockSignalingClient`.
+ * anything else without touching the WebRTC engine. [SocketIOSignalingClient] is the
+ * only implementation.
  *
  * Implementations MUST preserve event order for a given peer pairing — an `answer` that
  * overtakes its `offer` breaks negotiation.
@@ -61,12 +60,6 @@ internal sealed class SignalEvent {
     data class PeerState(
         val fromId: String,
         val state: SignalingSchema.PeerStatePayload,
-    ) : SignalEvent()
-
-    /** A peer started/stopped talking. Demo simulation only; the real path uses audio levels. */
-    data class PeerSpeaking(
-        val peerId: String,
-        val speaking: Boolean,
     ) : SignalEvent()
 
     /** Participant roster snapshot delivered after every (re)join. */

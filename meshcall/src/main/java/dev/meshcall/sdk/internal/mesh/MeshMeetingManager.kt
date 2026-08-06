@@ -43,7 +43,6 @@ internal class MeshMeetingManager(
     private val brokerUrl: String,
     private val userId: String,
     private val userName: String,
-    private val signalingFactory: ((meetingId: String) -> SignalingClient)? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -66,8 +65,7 @@ internal class MeshMeetingManager(
     private val relinkAttempts = HashMap<String, Int>()
 
     // ---- Active-speaker detection ----------------------------------------------
-    // Real path: RMS computed from each remote audio track (AudioTrackSink).
-    // Demo path: SignalEvent.PeerSpeaking from the mock client. Both feed _speakerId.
+    // RMS computed from each remote audio track (AudioTrackSink) feeds _speakerId.
 
     /** Last RMS (0..1) per peer, written on the WebRTC audio thread. */
     private val speakerLevels = ConcurrentHashMap<String, Float>()
@@ -121,8 +119,7 @@ internal class MeshMeetingManager(
         localVideoTrack = eng.localVideo
         _localMedia.value = LocalMediaState(eng.isMicEnabled, eng.isCameraEnabled)
 
-        val client = signalingFactory?.invoke(meetingId)
-            ?: SocketIOSignalingClient(brokerUrl, userId, userName)
+        val client = SocketIOSignalingClient(brokerUrl, userId, userName)
         signaling = client
         _signalingConnected.value = false
 
@@ -240,14 +237,6 @@ internal class MeshMeetingManager(
                 remoteMedia[event.fromId] =
                     event.state.micEnabled to event.state.cameraEnabled
                 publishPeers()
-            }
-
-            is SignalEvent.PeerSpeaking -> {
-                if (event.speaking) {
-                    _speakerId.value = event.peerId
-                } else if (_speakerId.value == event.peerId) {
-                    _speakerId.value = null
-                }
             }
 
             is SignalEvent.SignalingDisconnected -> {

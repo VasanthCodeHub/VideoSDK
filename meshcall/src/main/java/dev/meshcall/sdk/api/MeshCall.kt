@@ -1,7 +1,6 @@
 package dev.meshcall.sdk.api
 
 import android.content.Context
-import dev.meshcall.sdk.internal.demo.MockSignalingClient
 import dev.meshcall.sdk.internal.media.MediaConfig
 import dev.meshcall.sdk.internal.mesh.MeshMeetingManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,27 +72,6 @@ class MeshCall(context: Context) {
         manager.join(meetingId, MediaConfig.from(config))
     }
 
-    /**
-     * Demo-only join backed by a mock broker, so the meeting UI can be exercised offline
-     * (tiles, badges, roster churn, rotating speaker). Production code uses [join].
-     *
-     * @param simulatedPeers how many remote participants to simulate (2..10)
-     */
-    fun joinDemo(
-        meetingId: String,
-        displayName: String,
-        simulatedPeers: Int,
-        config: MeshCallConfig = MeshCallConfig(),
-    ) {
-        leave()
-        val manager = MeshMeetingManager(appContext, "mock://local", userId, displayName) {
-            MockSignalingClient(userId, displayName, simulatedPeers)
-        }
-        managerFlow.value = manager
-        currentMeetingId = meetingId
-        manager.join(meetingId, MediaConfig.from(config))
-    }
-
     // ---- Observable state -------------------------------------------------------
 
     /** High-level session status. */
@@ -104,7 +82,7 @@ class MeshCall(context: Context) {
         } ?: flowOf(MeetingState.IDLE)
     }
 
-    /** True while the signaling transport is connected to the broker (or the mock). */
+    /** True while the signaling transport is connected to the broker. */
     val connected: Flow<Boolean> = managerFlow.flatMapLatest { manager ->
         manager?.signalingConnected ?: flowOf(false)
     }
@@ -125,8 +103,8 @@ class MeshCall(context: Context) {
     }
 
     /**
-     * Id of the participant currently talking, or null. Driven by real audio levels on
-     * live meetings and simulated in demo mode, so the UI can keep the speaker on screen.
+     * Id of the participant currently talking, or null. Driven by real audio levels so
+     * the UI can keep the speaker on screen.
      */
     val speaker: Flow<String?> = managerFlow.flatMapLatest { manager ->
         manager?.speakerId ?: flowOf(null)

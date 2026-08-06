@@ -81,7 +81,7 @@ inflates under any host theme.
 
 | Type | Purpose |
 |------|---------|
-| `MeshCall` | Session: `join(brokerUrl, meetingId, displayName, config)`, `joinDemo(...)`, `leave()`, `dispose()`, `toggleMic()`, `toggleCamera()`, `switchCamera()`, `setMic/setCamera` |
+| `MeshCall` | Session: `join(brokerUrl, meetingId, displayName, config)`, `leave()`, `dispose()`, `toggleMic()`, `toggleCamera()`, `switchCamera()`, `setMic/setCamera` |
 | `MeshCall` flows | `participants`, `speaker`, `connected`, `localMedia`, `state`, `errors` — stable across joins; safe to collect before or after `join` |
 | `MeshMeetingView` | The complete meeting screen. `attach(call, meetingId, showConnectionBanner)`, `detach()`, `leaveNow()`, callbacks `onLeave` / `onShareScreen` / `onMoreOptions`, flag `confirmBeforeLeaving` |
 | `MeshParticipantGrid` | Just the tile grid, for building a custom meeting screen. `bind`/`unbind`/`release`, `setPinned`, `setSpeaker`, `setLocalMediaState`, `onPinRequest` |
@@ -100,7 +100,6 @@ inflates under any host theme.
 | `signaling/` | `SignalingClient`, `SocketIOSignalingClient`, `SignalEvent`, `SignalingSchema` |
 | `mesh/` | `MeshMeetingManager` — normalizes signaling + media into flows |
 | `media/` | `MediaConfig` — internal mirror of `MeshCallConfig` |
-| `demo/` | `MockSignalingClient`, `MockMeetingData` — offline demo mode only |
 | `util/` | `MeshLog` — everything logs under the `MeshCall/*` tag |
 
 ---
@@ -231,13 +230,6 @@ Constants: `SignalingSchema.kt` (`TYPE_*`, `KEY_*`).
 | WebRTC | `io.github.webrtc-sdk:android:144.7559.09` |
 | Signaling | `io.socket:socket.io-client:2.1.2` |
 
-### Offline (no broker needed)
-
-Lobby → **Create** or **Join** → flip the **Demo mode** switch. `MockSignalingClient`
-simulates a 6-peer meeting with roster churn, mute/unmute, and a rotating speaker.
-Connections deliberately stay in `connecting`, which exercises the placeholder and
-connection-dot UI.
-
 ### With a broker
 
 1. Run the broker on port 3000: `cd VideoSDKServer/server && npm install && npm start`
@@ -247,12 +239,8 @@ connection-dot UI.
 4. Both devices join the same meeting code.
 
 ```bash
-# real broker
 adb shell am start -n com.example.videocall/.MainActivity \
   -e broker ws://10.0.2.2:3000 -e meeting DEMO01 -e name Alice
-
-# offline demo
-adb shell am start -n com.example.videocall/.MainActivity --ez demo true --ei peers 8
 ```
 
 ### Configuring ICE (STUN/TURN)
@@ -322,7 +310,7 @@ symmetric NAT.
 - No speaker/earpiece audio routing control.
 - `ws://` cleartext is enabled for dev. Use `wss://` in production and drop
   `usesCleartextTraffic`.
-- No automated tests. Verification is demo mode plus the manual checklist in §8.
+- No automated tests. Verification is the manual checklist in §9.
 
 ---
 
@@ -409,7 +397,6 @@ reconnects and resumes · re-joining the same meeting is a no-op · ICE failure 
 
 | Environment | Setup |
 |-------------|-------|
-| Demo mode | No broker. Exercises all UI paths including 8-peer overflow. |
 | Emulator | `ws://10.0.2.2:3000` or `adb reverse tcp:3000 tcp:3000`. Virtual camera only. |
 | LAN (primary) | Two real phones + broker PC on one Wi-Fi. Verify both create/join orders, and 3 phones in one meeting. |
 | Cross-network (final gate) | One phone on mobile data, one on Wi-Fi, TURN configured. |
@@ -426,7 +413,7 @@ Also useful: `IceConnectionState`, `webrtc/CameraStatistics`, `SurfaceEglRendere
 ### Bug report template
 
 ```
-Environment: two real phones (models/OS) / emulator / demo mode
+Environment: two real phones (models/OS) / emulator
 Meeting code:
 Steps:
 Expected:

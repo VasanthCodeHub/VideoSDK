@@ -13,7 +13,6 @@
     <string name="meeting_code_hint">Meeting code</string>
     <string name="server_hint">Signaling server</string>
     <string name="enter_meeting_code">Enter a meeting code to join</string>
-    <string name="demo_mode">Demo mode (no server)</string>
 
     <!-- Meeting code dialog -->
     <string name="your_meeting_code">Your meeting code</string>

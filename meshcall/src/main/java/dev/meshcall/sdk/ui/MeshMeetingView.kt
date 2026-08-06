@@ -153,7 +153,7 @@ class MeshMeetingView @JvmOverloads constructor(
      * Bind an already-joined [call] to this view.
      *
      * @param meetingId shown in the badge and copied to the clipboard when tapped
-     * @param showConnectionBanner set false in demo mode, where there is no broker to reach
+     * @param showConnectionBanner whether to show the "connecting to broker" banner
      */
     fun attach(
         call: MeshCall,

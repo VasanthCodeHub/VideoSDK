@@ -103,7 +103,6 @@ class LobbyActivity : AppCompatActivity() {
             startMeeting(
                 meetingCode = code,
                 broker = dialogBinding.etBroker.text.toString().trim(),
-                demo = dialogBinding.swDemo.isChecked,
             )
         }
         dialog.show()
@@ -130,7 +129,6 @@ class LobbyActivity : AppCompatActivity() {
                 meetingCode = meetingCode,
                 broker = DEFAULT_BROKER,
                 title = title,
-                demo = dialogBinding.swDemo.isChecked,
             )
         }
         dialog.show()
@@ -153,16 +151,13 @@ class LobbyActivity : AppCompatActivity() {
         meetingCode: String,
         broker: String,
         title: String = "",
-        demo: Boolean = false,
     ) {
         startActivity(
             Intent(this, MainActivity::class.java)
                 .putExtra(EXTRA_BROKER, broker.ifEmpty { DEFAULT_BROKER })
                 .putExtra(EXTRA_MEETING, meetingCode)
                 .putExtra(EXTRA_TITLE, title)
-                .putExtra(EXTRA_NAME, Build.MODEL)
-                .putExtra(EXTRA_DEMO, demo)
-                .putExtra(EXTRA_PEERS, DEFAULT_DEMO_PEERS),
+                .putExtra(EXTRA_NAME, Build.MODEL),
         )
     }
 
@@ -181,11 +176,8 @@ class LobbyActivity : AppCompatActivity() {
         const val EXTRA_MEETING = "meeting"
         const val EXTRA_TITLE = "title"
         const val EXTRA_NAME = "name"
-        const val EXTRA_DEMO = "demo"
-        const val EXTRA_PEERS = "peers"
 
         const val DEFAULT_BROKER = "ws://10.0.2.2:3000"
-        const val DEFAULT_DEMO_PEERS = 6
         const val MEETING_CODE_LENGTH = 6
         const val MEETING_CLIP_LABEL = "meeting_code"
         const val MEETING_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"

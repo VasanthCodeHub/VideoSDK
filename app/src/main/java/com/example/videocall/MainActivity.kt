@@ -27,8 +27,7 @@ import kotlinx.coroutines.launch
  * belongs to the host app: runtime permissions, identity, and navigation.
  *
  * Launch extras:
- *   -e broker ws://10.0.2.2:3000 -e meeting ABC123 -e name Alice   (real broker)
- *   --ez demo true --ei peers 8                                    (offline demo)
+ *   -e broker ws://10.0.2.2:3000 -e meeting ABC123 -e name Alice
  */
 class MainActivity : AppCompatActivity() {
 
@@ -75,11 +74,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startMeeting() {
-        val demo = intent.getBooleanExtra(EXTRA_DEMO, false)
         val broker = intent.getStringExtra(EXTRA_BROKER) ?: DEFAULT_BROKER
         val meetingId = intent.getStringExtra(EXTRA_MEETING) ?: DEFAULT_MEETING
         val name = intent.getStringExtra(EXTRA_NAME) ?: Build.MODEL
-        val simulatedPeers = intent.getIntExtra(EXTRA_PEERS, DEFAULT_DEMO_PEERS)
 
         meetingCode = meetingId
         meetingTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
@@ -91,12 +88,8 @@ class MainActivity : AppCompatActivity() {
 
         val mesh = MeshCall(applicationContext)
         call = mesh
-        if (demo) {
-            mesh.joinDemo(meetingId, name, simulatedPeers)
-        } else {
-            mesh.join(broker, meetingId, name, MeshCallConfig())
-        }
-        binding.meetingView.attach(mesh, meetingId, showConnectionBanner = !demo)
+        mesh.join(broker, meetingId, name, MeshCallConfig())
+        binding.meetingView.attach(mesh, meetingId, showConnectionBanner = true)
 
         lifecycleScope.launch {
             mesh.participants.collect { peers -> lastParticipantCount = peers.size }
@@ -137,10 +130,7 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_MEETING = "meeting"
         const val EXTRA_TITLE = "title"
         const val EXTRA_NAME = "name"
-        const val EXTRA_DEMO = "demo"
-        const val EXTRA_PEERS = "peers"
         const val DEFAULT_BROKER = "ws://10.0.2.2:3000"
-        const val DEFAULT_MEETING = "demo-meeting"
-        const val DEFAULT_DEMO_PEERS = 6
+        const val DEFAULT_MEETING = "ABC123"
     }
 }
