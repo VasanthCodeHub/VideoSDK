@@ -12,11 +12,11 @@ import dev.meshcall.sdk.api.MeshCallConfig
 internal data class MediaConfig(
     val cameraFacing: CameraFacing = CameraFacing.FRONT,
     val frameRate: Int = 30,
-    val videoWidth: Int = 640,
-    val videoHeight: Int = 480,
+    val videoWidth: Int = 1280,
+    val videoHeight: Int = 720,
     val initialMicOn: Boolean = true,
     val initialCameraOn: Boolean = true,
-    val maxVideoKbps: Int = 500,
+    val maxVideoKbps: Int = 1000,
     val iceServers: List<IceServerConfig> = MeshCallConfig.DEFAULT_ICE_SERVERS,
 ) {
     enum class CameraFacing { FRONT, BACK }

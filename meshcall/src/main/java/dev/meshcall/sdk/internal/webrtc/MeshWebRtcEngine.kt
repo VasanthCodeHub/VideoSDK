@@ -238,10 +238,32 @@ internal class MeshWebRtcEngine(
 
         localAudioTrack?.let { pc.addTrack(it, listOf(LOCAL_STREAM_ID)) }
         localVideoTrack?.let { pc.addTrack(it, listOf(LOCAL_STREAM_ID)) }
+        capVideoSenderBitrate(pc)
 
         peerRecords[peerId] = holder
         MeshLog.d(TAG) { "peer connection created for $peerId" }
         return holder
+    }
+
+    /**
+     * Enforce [MediaConfig.maxVideoKbps] on the local video sender. The SDP `b=TIAS`
+     * line is only a hint; the encoder consults the sender's encoding parameters, so
+     * without this the cap is frequently ignored and video bursts well past it (or the
+     * encoder runs unbounded and starves the mesh uplink).
+     */
+    private fun capVideoSenderBitrate(pc: PeerConnection) {
+        if (config.maxVideoKbps <= 0) return
+        val track = localVideoTrack ?: return
+        pc.senders.forEach { sender ->
+            if (sender.track() !== track) return@forEach
+            val params = sender.parameters
+            params.encodings.forEach { it.maxBitrateBps = config.maxVideoKbps * 1000 }
+            if (sender.setParameters(params)) {
+                MeshLog.d(TAG) { "video sender capped at ${config.maxVideoKbps}kbps" }
+            } else {
+                MeshLog.w(TAG, "setParameters failed; video sender uncapped")
+            }
+        }
     }
 
     /** Emit a remote stream once, no matter which callback surfaced it. */

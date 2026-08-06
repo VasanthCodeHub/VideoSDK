@@ -16,7 +16,9 @@ internal object SdpTransform {
      * come directly after that section's `c=` line. Appending `b=AS:` to the end of the
      * whole description — the obvious-looking approach — is silently ignored by every
      * stack. So this walks each `m=video` section, drops any pre-existing bandwidth line,
-     * and re-inserts the cap in the one position that actually works.
+     * and re-inserts the cap in the one position that actually works. `b=TIAS` (bits per
+     * second) is used rather than the legacy `b=AS` (kbps) because libwebrtc prefers
+     * TIAS when both or either are present.
      *
      * Audio sections are left alone: capping them degrades intelligibility long before
      * video bitrate becomes the problem. Returns [sdp] unchanged when [kbps] <= 0.
@@ -55,7 +57,7 @@ internal object SdpTransform {
         }
         // Directly after c=; if the section inherits a session-level c=, right after m=.
         val connectionLine = kept.indexOfFirst { it.startsWith("c=") }
-        kept.add(if (connectionLine >= 0) connectionLine + 1 else 1, "b=AS:$kbps")
+        kept.add(if (connectionLine >= 0) connectionLine + 1 else 1, "b=TIAS:${kbps * 1000}")
         return kept
     }
 }

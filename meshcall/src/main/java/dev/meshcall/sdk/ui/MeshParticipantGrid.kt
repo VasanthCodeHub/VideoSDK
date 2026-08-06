@@ -29,9 +29,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.webrtc.EglBase
 import org.webrtc.MediaStream
+import org.webrtc.ScalingMode
 import org.webrtc.SurfaceViewRenderer
 import org.webrtc.VideoTrack
 import kotlin.math.ceil
+import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
@@ -462,6 +464,9 @@ class MeshParticipantGrid(
     private fun initRenderer(renderer: MeshVideoRenderer, egl: EglBase.Context) {
         if (!initialized.add(renderer)) return
         renderer.setEnableHardwareScaler(true)
+        // Fill the tile edge to edge: the default stretch mode distorts non-matching
+        // aspects, which reads as "blurry" video on non-16:9 tiles.
+        renderer.setScalingMode(ScalingMode.SCALE_ASPECT_FILL)
         // Every surface stays in the underlay plane so tile chrome (window plane) always
         // draws above the video. See README §7 rule 6.
         renderer.setZOrderMediaOverlay(false)
@@ -544,30 +549,53 @@ class MeshParticipantGrid(
         return main.toList()
     }
 
+    /**
+     * Place the main-grid tiles.
+     *
+     * Columns adapt to the container: portrait meetings get at most 2 columns (a 3-wide
+     * row on a phone makes every tile a sliver), landscape gets up to 4. Partial rows —
+     * e.g. 3 tiles in a 2x2 grid — are centered instead of left-aligned, and the whole
+     * block is centered vertically, so the layout stays symmetric as people join/leave.
+     */
     private fun applyGrid() {
         val width = gridContainer.width
         val height = gridContainer.height
         val mainIds = mainTileIds()
         val overflowIds = tiles.keys.filter { it !in mainIds }
 
-        if (width > 0 && height > 0 && mainIds.isNotEmpty()) {
+        if (mainIds.isNotEmpty() && width > 0 && height > 0) {
+            val n = mainIds.size
             val gap = dp(10)
-            val cols = ceil(sqrt(mainIds.size.toDouble())).toInt().coerceIn(1, 3)
-            val rows = ceil(mainIds.size.toDouble() / cols).toInt()
+            val maxCols = if (width > height) 4 else 2
+            val cols = ceil(sqrt(n.toDouble())).toInt().coerceIn(1, maxCols)
+            val rows = ceil(n.toDouble() / cols).toInt()
             val cellW = (width - gap * (cols + 1)) / cols
             val cellH = (height - gap * (rows + 1)) / rows
 
-            mainIds.forEachIndexed { index, peerId ->
-                val tile = tiles[peerId] ?: return@forEachIndexed
-                tile.frame.visibility = View.VISIBLE
-                val lp = tile.frame.layoutParams as FrameLayout.LayoutParams
-                lp.width = cellW
-                lp.height = cellH
-                lp.leftMargin = gap + (index % cols) * (cellW + gap)
-                lp.topMargin = gap + (index / cols) * (cellH + gap)
-                lp.rightMargin = 0
-                lp.bottomMargin = 0
-                tile.frame.layoutParams = lp
+            if (cellW > 0 && cellH > 0) {
+                // Center the whole block vertically when the grid leaves unused space.
+                val blockH = rows * cellH + (rows - 1) * gap
+                val topPad = ((height - blockH) / 2).coerceAtLeast(gap)
+
+                mainIds.forEachIndexed { index, peerId ->
+                    val tile = tiles[peerId] ?: return@forEachIndexed
+                    tile.frame.visibility = View.VISIBLE
+                    val row = index / cols
+                    val col = index % cols
+                    val inRow = min(cols, n - row * cols)
+                    // Center a partial last row so the odd tile sits in the middle.
+                    val rowWidth = inRow * cellW + (inRow - 1) * gap
+                    val leftPad = ((width - rowWidth) / 2).coerceAtLeast(gap)
+
+                    val lp = tile.frame.layoutParams as FrameLayout.LayoutParams
+                    lp.width = cellW
+                    lp.height = cellH
+                    lp.leftMargin = leftPad + col * (cellW + gap)
+                    lp.topMargin = topPad + row * (cellH + gap)
+                    lp.rightMargin = 0
+                    lp.bottomMargin = 0
+                    tile.frame.layoutParams = lp
+                }
             }
         }
 

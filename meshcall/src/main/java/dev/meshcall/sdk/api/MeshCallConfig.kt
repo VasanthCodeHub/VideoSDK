@@ -18,20 +18,21 @@ data class IceServerConfig(
 /**
  * Per-session tuning passed to [MeshCall.join].
  *
- * Defaults target a 4-5 person mesh on mobile Wi-Fi: modest capture resolution and a
- * per-link bitrate ceiling, because a mesh participant uploads its stream once per peer.
+ * Defaults target a 4-5 person mesh on mobile Wi-Fi: 720p capture with a per-link
+ * bitrate ceiling, because a mesh participant uploads its stream once per peer.
  */
 data class MeshCallConfig(
-    val videoWidth: Int = 640,
-    val videoHeight: Int = 480,
+    val videoWidth: Int = 1280,
+    val videoHeight: Int = 720,
     val frameRate: Int = 30,
     /**
-     * Per-link video ceiling in kbps written into every outgoing SDP. A mesh uploads
-     * N-1 video streams, so capping each one keeps a 4-5 person meeting inside a mobile
-     * uplink instead of letting the encoder burst freely. Raise only when every
-     * participant is on fast wired backhaul; set 0 to disable the cap.
+     * Per-link video ceiling in kbps, enforced on every outgoing sender via RTP encoding
+     * parameters (and mirrored as `b=TIAS` in the SDP). A mesh uploads N-1 video streams,
+     * so capping each one keeps a 4-5 person meeting inside a mobile uplink instead of
+     * letting the encoder burst freely. Raise only when every participant is on fast
+     * wired backhaul; set 0 to disable the cap.
      */
-    val maxVideoKbps: Int = 500,
+    val maxVideoKbps: Int = 1000,
     val startWithMicOn: Boolean = true,
     val startWithCameraOn: Boolean = true,
     val useFrontCamera: Boolean = true,
