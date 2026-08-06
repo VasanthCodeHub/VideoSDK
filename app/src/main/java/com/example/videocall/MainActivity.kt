@@ -13,6 +13,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.videocall.data.MeetingHistoryRepository
 import com.example.videocall.databinding.ActivityMainBinding
+import dev.meshcall.sdk.api.IceServerConfig
 import dev.meshcall.sdk.api.LocalIdentityProvider
 import dev.meshcall.sdk.api.MeshCall
 import dev.meshcall.sdk.api.MeshCallConfig
@@ -88,7 +89,7 @@ class MainActivity : AppCompatActivity() {
 
         val mesh = MeshCall(applicationContext)
         call = mesh
-        mesh.join(broker, meetingId, name, MeshCallConfig())
+        mesh.join(broker, meetingId, name, MeshCallConfig(iceServers = ICE_SERVERS))
         binding.meetingView.attach(mesh, meetingId, showConnectionBanner = true)
 
         lifecycleScope.launch {
@@ -130,7 +131,27 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_MEETING = "meeting"
         const val EXTRA_TITLE = "title"
         const val EXTRA_NAME = "name"
-        const val DEFAULT_BROKER = "ws://10.0.2.2:3000"
+        const val DEFAULT_BROKER = "wss://district-body-stumbling.ngrok-free.dev"
         const val DEFAULT_MEETING = "ABC123"
+
+        /**
+         * STUN discovers each phone's public address; TURN relays media when no direct
+         * path exists. Mobile carriers sit behind CGNAT, where STUN alone never completes
+         * ICE — signaling succeeds and the video simply never arrives.
+         *
+         * These are Open Relay's public dev credentials, not secrets. They are rate
+         * limited and occasionally down: swap in your own TURN before shipping.
+         */
+        val ICE_SERVERS = listOf(
+            IceServerConfig("stun:stun.l.google.com:19302"),
+            IceServerConfig("stun:stun1.l.google.com:19302"),
+            IceServerConfig("turn:openrelay.metered.ca:80", "openrelayproject", "openrelayproject"),
+            IceServerConfig("turn:openrelay.metered.ca:443", "openrelayproject", "openrelayproject"),
+            IceServerConfig(
+                "turn:openrelay.metered.ca:443?transport=tcp",
+                "openrelayproject",
+                "openrelayproject",
+            ),
+        )
     }
 }

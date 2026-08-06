@@ -177,7 +177,7 @@ class LobbyActivity : AppCompatActivity() {
         const val EXTRA_TITLE = "title"
         const val EXTRA_NAME = "name"
 
-        const val DEFAULT_BROKER = "ws://10.0.2.2:3000"
+        const val DEFAULT_BROKER = "wss://district-body-stumbling.ngrok-free.dev"
         const val MEETING_CODE_LENGTH = 6
         const val MEETING_CLIP_LABEL = "meeting_code"
         const val MEETING_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
