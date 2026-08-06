@@ -294,6 +294,10 @@ class MeshParticipantGrid(
         }
 
         frame.addView(renderer, matchParent())
+        // ViewOutlineProvider.BACKGROUND only produces an outline when the view itself has
+        // a non-null background — without this, clipToOutline is silently a no-op and the
+        // video's square corners overhang the tile's rounded frame.
+        renderer.background = ContextCompat.getDrawable(context, R.drawable.bg_tile_clip)
         renderer.outlineProvider = ViewOutlineProvider.BACKGROUND
         renderer.clipToOutline = true
 
@@ -394,6 +398,16 @@ class MeshParticipantGrid(
             },
         )
         frame.addView(chrome, matchParent())
+
+        // Topmost: the visible frame border, drawn above the video so it is never
+        // obscured regardless of whether the SurfaceView clip above was honored.
+        frame.addView(
+            View(context).apply {
+                setBackgroundResource(R.drawable.bg_tile_border)
+                isClickable = false
+            },
+            matchParent(),
+        )
 
         if (!isLocal) frame.setOnClickListener { onPinRequest?.invoke(peerId) }
 
