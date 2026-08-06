@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import org.webrtc.AudioTrack
 import org.webrtc.AudioTrackSink
 import org.webrtc.EglBase
@@ -132,11 +133,15 @@ internal class MeshMeetingManager(
                     when (event) {
                         is MeshWebRtcEngine.ConnectionEvent.LocalMediaStateChanged -> {
                             _localMedia.value = LocalMediaState(event.micOn, event.camOn)
+                            // Nested under `state` — see [sendSdp].
                             client.sendMessage(
                                 SignalingSchema.TYPE_PEER_STATE,
                                 null,
-                                SignalingSchema.PeerStatePayload(event.micOn, event.camOn)
-                                    .toJson().toString(),
+                                JSONObject().put(
+                                    SignalingSchema.KEY_STATE,
+                                    SignalingSchema.PeerStatePayload(event.micOn, event.camOn)
+                                        .toJson(),
+                                ).toString(),
                             )
                         }
 
@@ -204,16 +209,30 @@ internal class MeshMeetingManager(
             }
 
             is SignalEvent.Offer -> {
-                val holder = connections[event.fromId] ?: ensureLinkTo(event.fromId) ?: return
-                val engine = engine ?: return
+                MeshLog.i(TAG) { "<- offer from ${event.fromId}" }
+                val holder = connections[event.fromId] ?: ensureLinkTo(event.fromId) ?: run {
+                    MeshLog.w(TAG, "offer from ${event.fromId} dropped — no link could be made")
+                    return
+                }
+                val engine = engine ?: run {
+                    MeshLog.w(TAG, "offer from ${event.fromId} dropped — engine is gone")
+                    return
+                }
                 engine.handleOffer(
                     holder,
                     SessionDescription(SessionDescription.Type.OFFER, event.sdp.sdp),
-                ) { peerId, answer -> sendSdp(SignalingSchema.TYPE_ANSWER, peerId, answer) }
+                ) { peerId, answer ->
+                    MeshLog.i(TAG) { "-> answer to $peerId" }
+                    sendSdp(SignalingSchema.TYPE_ANSWER, peerId, answer)
+                }
             }
 
             is SignalEvent.Answer -> {
-                val holder = connections[event.fromId] ?: return
+                MeshLog.i(TAG) { "<- answer from ${event.fromId}" }
+                val holder = connections[event.fromId] ?: run {
+                    MeshLog.w(TAG, "answer from ${event.fromId} dropped — no such connection")
+                    return
+                }
                 engine?.handleAnswer(
                     holder,
                     SessionDescription(SessionDescription.Type.ANSWER, event.sdp.sdp),
@@ -221,7 +240,10 @@ internal class MeshMeetingManager(
             }
 
             is SignalEvent.IceCandidate -> {
-                val holder = connections[event.fromId] ?: return
+                val holder = connections[event.fromId] ?: run {
+                    MeshLog.w(TAG, "ice from ${event.fromId} dropped — no such connection")
+                    return
+                }
                 engine?.addIceCandidate(
                     holder,
                     org.webrtc.IceCandidate(
@@ -264,16 +286,20 @@ internal class MeshMeetingManager(
         val holder = engine.preparePeerConnection(
             peerId = peerId,
             onIceCandidate = { pid, candidate ->
-                val payload = SignalingSchema.IceCandidatePayload(
-                    candidate.sdp,
-                    candidate.sdpMLineIndex,
-                    candidate.sdpMid,
+                // Nested under `candidate`, same as the SDP payloads — see [sendSdp].
+                val payload = JSONObject().put(
+                    SignalingSchema.KEY_ICE_CANDIDATE,
+                    SignalingSchema.IceCandidatePayload(
+                        candidate.sdp,
+                        candidate.sdpMLineIndex,
+                        candidate.sdpMid,
+                    ).toJson(),
                 )
                 scope.launch {
                     signaling?.sendMessage(
                         SignalingSchema.TYPE_ICE_CANDIDATE,
                         pid,
-                        payload.toJson().toString(),
+                        payload.toString(),
                     )
                 }
             },
@@ -288,7 +314,13 @@ internal class MeshMeetingManager(
         connections[peerId] = holder
 
         if (shouldOffer(userId, peerId)) {
-            engine.createOffer(holder) { pid, sdp -> sendSdp(SignalingSchema.TYPE_OFFER, pid, sdp) }
+            MeshLog.i(TAG) { "link $peerId — we offer (our id sorts lower)" }
+            engine.createOffer(holder) { pid, sdp ->
+                MeshLog.i(TAG) { "-> offer to $pid" }
+                sendSdp(SignalingSchema.TYPE_OFFER, pid, sdp)
+            }
+        } else {
+            MeshLog.i(TAG) { "link $peerId — waiting for their offer" }
         }
         publishPeers()
         return holder
@@ -332,8 +364,17 @@ internal class MeshMeetingManager(
         if (_speakerId.value == peerId) _speakerId.value = null
     }
 
+    /**
+     * Wire shape is `{ to, sdp: { type, sdp } }` — the description is **nested** under
+     * `sdp`, per README §4. Emitting the SdpPayload flat put a raw SDP string where the
+     * receiver's `optJSONObject("sdp")` expected an object, so every offer and answer was
+     * silently discarded on arrival and no call ever negotiated.
+     */
     private fun sendSdp(type: String, peerId: String, sdp: SessionDescription) {
-        val payload = SignalingSchema.SdpPayload(sdp.type.canonicalForm(), sdp.description).toJson()
+        val payload = JSONObject().put(
+            SignalingSchema.KEY_SDP,
+            SignalingSchema.SdpPayload(sdp.type.canonicalForm(), sdp.description).toJson(),
+        )
         scope.launch { signaling?.sendMessage(type, peerId, payload.toString()) }
     }
 

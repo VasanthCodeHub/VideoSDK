@@ -79,7 +79,9 @@ internal class SocketIOSignalingClient(
         }
         s.on(SignalingSchema.TYPE_OFFER) { args ->
             args.firstOrNull()?.asJson()?.let { j ->
-                val sdp = j.optJSONObject(SignalingSchema.KEY_SDP) ?: return@let
+                val sdp = j.requireObject(SignalingSchema.KEY_SDP, SignalingSchema.TYPE_OFFER)
+                    ?: return@let
+                MeshLog.i(TAG) { "<- offer from ${j.optString(SignalingSchema.KEY_FROM)}" }
                 _events.tryEmit(
                     SignalEvent.Offer(
                         j.optString(SignalingSchema.KEY_FROM),
@@ -90,7 +92,9 @@ internal class SocketIOSignalingClient(
         }
         s.on(SignalingSchema.TYPE_ANSWER) { args ->
             args.firstOrNull()?.asJson()?.let { j ->
-                val sdp = j.optJSONObject(SignalingSchema.KEY_SDP) ?: return@let
+                val sdp = j.requireObject(SignalingSchema.KEY_SDP, SignalingSchema.TYPE_ANSWER)
+                    ?: return@let
+                MeshLog.i(TAG) { "<- answer from ${j.optString(SignalingSchema.KEY_FROM)}" }
                 _events.tryEmit(
                     SignalEvent.Answer(
                         j.optString(SignalingSchema.KEY_FROM),
@@ -101,7 +105,10 @@ internal class SocketIOSignalingClient(
         }
         s.on(SignalingSchema.TYPE_ICE_CANDIDATE) { args ->
             args.firstOrNull()?.asJson()?.let { j ->
-                val c = j.optJSONObject(SignalingSchema.KEY_ICE_CANDIDATE) ?: return@let
+                val c = j.requireObject(
+                    SignalingSchema.KEY_ICE_CANDIDATE,
+                    SignalingSchema.TYPE_ICE_CANDIDATE,
+                ) ?: return@let
                 _events.tryEmit(
                     SignalEvent.IceCandidate(
                         j.optString(SignalingSchema.KEY_FROM),
@@ -112,7 +119,8 @@ internal class SocketIOSignalingClient(
         }
         s.on(SignalingSchema.TYPE_PEER_STATE) { args ->
             args.firstOrNull()?.asJson()?.let { j ->
-                val st = j.optJSONObject(SignalingSchema.KEY_STATE) ?: return@let
+                val st = j.requireObject(SignalingSchema.KEY_STATE, SignalingSchema.TYPE_PEER_STATE)
+                    ?: return@let
                 _events.tryEmit(
                     SignalEvent.PeerState(
                         j.optString(SignalingSchema.KEY_FROM),
@@ -218,6 +226,24 @@ internal class SocketIOSignalingClient(
             timeout = 12_000
         }
         return IO.socket(url, opts)
+    }
+
+    /**
+     * Read a required nested object, loudly.
+     *
+     * These lookups used to be `optJSONObject(key) ?: return@let`, which discarded the
+     * message without a trace. A sender that flattened the payload — putting a raw SDP
+     * string where an object belonged — therefore produced a meeting that connected,
+     * exchanged nothing, and showed no error anywhere. Never fail silently here.
+     */
+    private fun JSONObject.requireObject(key: String, event: String): JSONObject? {
+        optJSONObject(key)?.let { return it }
+        MeshLog.w(
+            TAG,
+            "malformed $event: \"$key\" is ${if (has(key)) "not an object" else "missing"} " +
+                "— dropped. keys=${keys().asSequence().toList()}",
+        )
+        return null
     }
 
     private fun Any?.asJson(): JSONObject? = when (this) {

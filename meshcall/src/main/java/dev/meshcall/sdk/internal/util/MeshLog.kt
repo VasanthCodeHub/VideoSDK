@@ -13,6 +13,17 @@ internal object MeshLog {
 
     private const val PREFIX = "MeshCall"
 
+    /**
+     * Every scope the SDK logs under. Declared here rather than as a private `TAG` in each
+     * file so the set is greppable and logcat filters stay stable across refactors.
+     */
+    const val SCOPE_MESH = "Mesh"
+    const val SCOPE_ENGINE = "Engine"
+    const val SCOPE_CAMERA = "Camera"
+    const val SCOPE_SIGNALING = "Signaling"
+    const val SCOPE_GRID = "Grid"
+    const val SCOPE_MEETING_VIEW = "MeetingView"
+
     /** Set false from a consumer's Application to silence everything below WARN. */
     @Volatile
     var verbose: Boolean = true

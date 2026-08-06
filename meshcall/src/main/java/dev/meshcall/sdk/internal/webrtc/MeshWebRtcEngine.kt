@@ -247,7 +247,15 @@ internal class MeshWebRtcEngine(
     /** Emit a remote stream once, no matter which callback surfaced it. */
     private fun publishStream(peerId: String, stream: MediaStream) {
         if (lastStreamIdByPeer.put(peerId, stream.id) == stream.id) return
-        MeshLog.d(TAG) { "remote stream ${stream.id} from $peerId" }
+        // Track counts matter: a stream that arrives with zero video tracks renders as a
+        // black tile, which is indistinguishable from an ICE failure without this line.
+        MeshLog.i(TAG) {
+            "remote stream ${stream.id} from $peerId " +
+                "(video=${stream.videoTracks.size} audio=${stream.audioTracks.size})"
+        }
+        if (stream.videoTracks.isEmpty()) {
+            MeshLog.w(TAG, "remote stream from $peerId has no video track — tile will stay black")
+        }
         _remoteStreams.tryEmit(RemoteStreamUpdate(peerId, stream))
     }
 
@@ -452,12 +460,21 @@ internal class MeshWebRtcEngine(
     }
 
     private fun startCapture() {
-        val capturer = videoCapturer ?: return
+        val capturer = videoCapturer
+        if (capturer == null) {
+            // Silent here previously: no capturer meant a black self-tile and no clue why.
+            MeshLog.w(MeshLog.SCOPE_CAMERA, "startCapture ignored — no capturer was created")
+            return
+        }
         captureExecutor.execute {
             try {
                 capturer.startCapture(config.videoWidth, config.videoHeight, config.frameRate)
+                MeshLog.i(MeshLog.SCOPE_CAMERA) {
+                    "capture started ${config.videoWidth}x${config.videoHeight}@${config.frameRate}"
+                }
             } catch (e: Exception) {
                 onError("", "Failed to start camera capture: ${e.message}")
+                MeshLog.e(MeshLog.SCOPE_CAMERA, "startCapture failed", e)
             }
         }
     }
@@ -481,30 +498,66 @@ internal class MeshWebRtcEngine(
 
     /** Build the camera capturer + local video track (capture is started separately). */
     private fun createCameraTrack(f: PeerConnectionFactory) {
-        val enumerator: CameraEnumerator = if (Camera2Enumerator.isSupported(appContext)) {
+        val camera2 = Camera2Enumerator.isSupported(appContext)
+        val enumerator: CameraEnumerator = if (camera2) {
             Camera2Enumerator(appContext)
         } else {
             Camera1Enumerator(false)
         }
-        val deviceId = findCamera(enumerator, config.cameraFacing == MediaConfig.CameraFacing.FRONT)
+
+        val devices = enumerator.deviceNames
+        MeshLog.i(MeshLog.SCOPE_CAMERA) {
+            "enumerator=${if (camera2) "Camera2" else "Camera1"} devices=${devices.size} " +
+                devices.joinToString(prefix = "[", postfix = "]") {
+                    "$it${if (enumerator.isFrontFacing(it)) ":front" else ":back"}"
+                }
+        }
+        if (devices.isEmpty()) {
+            onError("", "Camera enumerator reported no devices")
+            return
+        }
+
+        val wantFront = config.cameraFacing == MediaConfig.CameraFacing.FRONT
+        val deviceId = findCamera(enumerator, wantFront)
         if (deviceId == null) {
             onError("", "No camera available on this device")
             return
         }
+        MeshLog.i(MeshLog.SCOPE_CAMERA) { "selected camera $deviceId (wantFront=$wantFront)" }
 
-        val capturer = enumerator.createCapturer(deviceId, null) as? CameraVideoCapturer
+        // createCapturer throws rather than returning null on some OEM builds (Samsung
+        // in particular). Letting it escape aborts prepareLocalMedia() mid-way and the
+        // meeting comes up with no local track at all, which looks like a dead camera.
+        val capturer = try {
+            enumerator.createCapturer(deviceId, null) as? CameraVideoCapturer
+        } catch (e: Exception) {
+            onError("", "createCapturer($deviceId) threw: ${e.message}")
+            MeshLog.e(MeshLog.SCOPE_CAMERA, "createCapturer($deviceId) threw", e)
+            null
+        }
         if (capturer == null) {
             onError("", "Unable to create a capturer for camera $deviceId")
             return
         }
 
-        val helper = surfaceTextureHelper ?: return
+        val helper = surfaceTextureHelper
+        if (helper == null) {
+            onError("", "SurfaceTextureHelper missing; camera cannot be initialized")
+            return
+        }
+
         val source = f.createVideoSource(false)
         videoSource = source
         localVideoTrack = f.createVideoTrack(VIDEO_TRACK_ID, source)
-        capturer.initialize(helper, appContext, source.capturerObserver)
+        try {
+            capturer.initialize(helper, appContext, source.capturerObserver)
+        } catch (e: Exception) {
+            onError("", "capturer.initialize failed: ${e.message}")
+            MeshLog.e(MeshLog.SCOPE_CAMERA, "capturer.initialize failed", e)
+            return
+        }
         videoCapturer = capturer
-        MeshLog.d(TAG) { "camera track ready on $deviceId" }
+        MeshLog.i(MeshLog.SCOPE_CAMERA) { "camera track ready on $deviceId" }
     }
 
     /**
