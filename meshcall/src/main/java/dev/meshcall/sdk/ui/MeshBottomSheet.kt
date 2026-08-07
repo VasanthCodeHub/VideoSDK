@@ -134,6 +134,79 @@ internal class MeshBottomSheet(private val context: Context) {
         content.addView(row, rowParams())
     }
 
+    /**
+     * Icon, title and supporting line, for a sheet that asks something instead of listing
+     * choices. Confirmations use this rather than a platform `AlertDialog`: the dialog is
+     * themed by the *host* app, so it lands on the meeting's dark chrome as a bright
+     * rectangle in whatever style the host happens to use.
+     */
+    fun addHeadline(iconRes: Int, titleRes: Int, messageRes: Int) {
+        val iconSize = dp(48)
+        content.addView(
+            ImageView(context).apply {
+                setImageResource(iconRes)
+                setBackgroundResource(R.drawable.meshcall_bg_headline_icon)
+                setPadding(dp(13), dp(13), dp(13), dp(13))
+                imageTintList = ColorStateList.valueOf(color(R.color.meshcall_status_red))
+            },
+            LinearLayout.LayoutParams(iconSize, iconSize).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = dp(6)
+            },
+        )
+
+        content.addView(
+            TextView(context).apply {
+                setText(titleRes)
+                setTextColor(color(R.color.meshcall_white))
+                textSize = 18f
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+            },
+            rowParams().apply { topMargin = dp(14) },
+        )
+
+        content.addView(
+            TextView(context).apply {
+                setText(messageRes)
+                setTextColor(color(R.color.meshcall_on_chrome_dim))
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(dp(16), 0, dp(16), 0)
+            },
+            rowParams().apply { topMargin = dp(6); bottomMargin = dp(16) },
+        )
+    }
+
+    /**
+     * A full-width action button. [danger] fills it red; every other action stays outlined
+     * so the destructive one is never the quiet option.
+     *
+     * Dismisses before running [onClick]: leaving tears the meeting screen down, and a
+     * dialog dismissed after its host window is gone leaks a window token.
+     */
+    fun addAction(labelRes: Int, danger: Boolean = false, onClick: () -> Unit) {
+        content.addView(
+            TextView(context).apply {
+                setText(labelRes)
+                setTextColor(color(R.color.meshcall_white))
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                setBackgroundResource(
+                    if (danger) R.drawable.meshcall_bg_sheet_action_danger
+                    else R.drawable.meshcall_bg_sheet_action,
+                )
+                setPadding(dp(12), dp(14), dp(12), dp(14))
+                setOnClickListener {
+                    dismiss()
+                    onClick()
+                }
+            },
+            rowParams().apply { topMargin = dp(8) },
+        )
+    }
+
     fun show() = dialog.show()
 
     fun dismiss() = dialog.dismiss()

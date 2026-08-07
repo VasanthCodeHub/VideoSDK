@@ -45,6 +45,60 @@
                     android:textSize="22sp"
                     android:textStyle="bold" />
 
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <!--
+                    Tapping the name reopens the name screen in edit mode. The 16dp end
+                    margin mirrors the logo's start margin: Toolbar's contentInsetEnd is
+                    0 by default while contentInsetStart is overridden to 0 here, so
+                    without it the chip sits 16dp closer to the edge than the logo.
+                -->
+                <LinearLayout
+                    android:id="@+id/btn_profile"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:background="@drawable/bg_chip"
+                    android:clickable="true"
+                    android:contentDescription="@string/change_name"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="10dp"
+                    android:paddingVertical="6dp">
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:contentDescription="@string/account"
+                        android:src="@drawable/ic_account_circle"
+                        app:tint="@color/on_surface" />
+
+                    <TextView
+                        android:id="@+id/profile_name"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:ellipsize="end"
+                        android:maxWidth="120dp"
+                        android:singleLine="true"
+                        android:textColor="@color/on_surface"
+                        android:textSize="14sp"
+                        tools:text="Jack" />
+
+                    <ImageView
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:layout_marginStart="8dp"
+                        android:contentDescription="@string/change_name"
+                        android:src="@drawable/ic_edit"
+                        app:tint="@color/on_surface_variant" />
+                </LinearLayout>
+
             </LinearLayout>
         </com.google.android.material.appbar.MaterialToolbar>
 

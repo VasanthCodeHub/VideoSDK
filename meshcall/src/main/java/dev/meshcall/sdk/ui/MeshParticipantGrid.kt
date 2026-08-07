@@ -31,9 +31,7 @@ import org.webrtc.MediaStream
 import org.webrtc.RendererCommon
 import org.webrtc.SurfaceViewRenderer
 import org.webrtc.VideoTrack
-import kotlin.math.ceil
 import kotlin.math.min
-import kotlin.math.sqrt
 
 /**
  * Binds a [MeshCall] session to a responsive tile grid inside [gridContainer].
@@ -45,8 +43,12 @@ import kotlin.math.sqrt
  *  - A tile is a [FrameLayout] holding the video surface (underlay plane), a placeholder
  *    shown while the peer has no video, and chrome (name chip, mic/camera badges,
  *    connection dot, speaking ring) that always draws above the video.
- *  - Up to [mainSlots] tiles occupy the grid; everyone else becomes a compact avatar chip
- *    in [overflowContainer]. Pinned and speaking participants are promoted into the grid.
+ *  - Tiles fill the grid in rows: pairs per row, and a leftover odd tile spans the full
+ *    width of its own row. Rows share the height equally, so the whole block shrinks as
+ *    people join instead of pushing anyone out.
+ *  - Only past [maxGridTiles] — far beyond what a mesh meeting carries — does anyone become
+ *    a compact avatar chip in [overflowContainer]; pinned and speaking participants are
+ *    then promoted back into the grid.
  *  - Cells never overlap, so SurfaceViews compose without z-order fights.
  *
  * Most hosts should use [MeshMeetingView], which owns one of these plus the meeting
@@ -82,8 +84,14 @@ class MeshParticipantGrid(
     private var pinnedId: String? = null
     private var speakerId: String? = null
 
-    /** Max tiles in the main grid; the "You" tile always keeps one. */
-    private val mainSlots = 4
+    /**
+     * Hard ceiling on grid tiles; the "You" tile always keeps one.
+     *
+     * This is a legibility floor, not a design preference: at ten tiles a phone-sized cell
+     * is too small to recognise a face, so the tail goes to the overflow strip. A mesh
+     * meeting is nowhere near this in practice, so everyone normally stays in the grid.
+     */
+    private val maxGridTiles = 9
 
     private var localMicOn = true
     private var localCamOn = true
@@ -591,21 +599,33 @@ class MeshParticipantGrid(
     }
 
     /**
-     * Choose the main-grid occupants: the pinned participant first, then the active
-     * speaker, then roster order. The "You" tile always keeps a slot; when the grid is
-     * full the lowest-priority remote is evicted. Everyone else goes to the overflow strip.
+     * Choose the main-grid occupants.
+     *
+     * While everyone fits — the normal case — the grid keeps plain roster order with the
+     * "You" tile last. Promoting the speaker here would reshuffle every tile each time
+     * somebody starts talking, and a grid that rearranges itself mid-sentence is far more
+     * distracting than it is helpful.
+     *
+     * Only once the roster outgrows [maxGridTiles] does priority matter: the pinned
+     * participant comes first, then the active speaker, then roster order, and the
+     * lowest-priority remote is evicted to the overflow strip so the "You" tile keeps a slot.
      */
     private fun mainTileIds(): List<String> {
         val remote = tiles.keys.filter { it != LOCAL_PEER_ID }
+        val hasLocal = LOCAL_PEER_ID in tiles
+        if (remote.size + (if (hasLocal) 1 else 0) <= maxGridTiles) {
+            return if (hasLocal) remote + LOCAL_PEER_ID else remote
+        }
+
         val main = LinkedHashSet<String>()
         pinnedId?.takeIf { it in remote }?.let(main::add)
         speakerId?.takeIf { it in remote }?.let(main::add)
         for (id in remote) {
-            if (main.size >= mainSlots) break
+            if (main.size >= maxGridTiles) break
             main.add(id)
         }
-        if (LOCAL_PEER_ID in tiles) {
-            if (main.size >= mainSlots) {
+        if (hasLocal) {
+            if (main.size >= maxGridTiles) {
                 main.lastOrNull { it != pinnedId && it != speakerId }?.let(main::remove)
             }
             main.add(LOCAL_PEER_ID)
@@ -614,16 +634,51 @@ class MeshParticipantGrid(
     }
 
     /**
-     * Place the main-grid tiles.
+     * How many tiles sit on each row, top to bottom.
      *
-     * Columns adapt to the container: portrait meetings get at most 2 columns (a 3-wide
-     * row on a phone makes every tile a sliver), landscape gets up to 4. Partial rows —
-     * e.g. 3 tiles in a 2x2 grid — are centered instead of left-aligned, and the whole
-     * block is centered vertically, so the layout stays symmetric as people join/leave.
+     * The rule is "pair them up, and let a leftover tile own its row": 3 tiles are a pair
+     * plus one full-width tile underneath, 4 are a clean 2x2, 5 are two pairs plus a
+     * full-width tile. Rows always fill the container edge to edge, so a partial row is
+     * stretched rather than left as a half-width tile with a hole beside it.
      *
-     * Two participants are special-cased (Meet/WhatsApp convention): sqrt-based columns
-     * would put them side by side even in portrait, leaving two tall slivers. Portrait
-     * instead stacks them into a 50/50 top-bottom split; landscape keeps them side by side.
+     * Row size grows with the container instead of staying at two forever: past six tiles a
+     * portrait phone would otherwise stack four rows of letterbox slivers, and a landscape
+     * container has the width to seat three or four across from the start.
+     *
+     * Two participants are special-cased (Meet/WhatsApp convention): portrait stacks them
+     * 50/50 top-bottom, which suits upright faces far better than two tall slivers;
+     * landscape keeps them side by side.
+     */
+    private fun rowPlan(count: Int, landscape: Boolean): List<Int> {
+        if (count <= 1) return listOf(1)
+        if (count == 2) return if (landscape) listOf(2) else listOf(1, 1)
+
+        val perRow = if (landscape) {
+            when {
+                count <= 4 -> 2
+                count <= 6 -> 3
+                else -> 4
+            }
+        } else {
+            if (count <= 6) 2 else 3
+        }
+
+        val plan = ArrayList<Int>()
+        var remaining = count
+        while (remaining > 0) {
+            val inRow = min(perRow, remaining)
+            plan.add(inRow)
+            remaining -= inRow
+        }
+        return plan
+    }
+
+    /**
+     * Place the main-grid tiles along the [rowPlan].
+     *
+     * Every row is the same height and every tile in a row the same width, so adding a
+     * participant shrinks the existing tiles instead of displacing anyone: the block always
+     * fills the container exactly, with a uniform gap as the only gutter.
      */
     private fun applyGrid() {
         val width = gridContainer.width
@@ -632,41 +687,29 @@ class MeshParticipantGrid(
         val overflowIds = tiles.keys.filter { it !in mainIds }
 
         if (mainIds.isNotEmpty() && width > 0 && height > 0) {
-            val n = mainIds.size
             val gap = dp(10)
-            val maxCols = if (width > height) 4 else 2
-            val cols = if (n == 2) {
-                if (width > height) 2 else 1
-            } else {
-                ceil(sqrt(n.toDouble())).toInt().coerceIn(1, maxCols)
-            }
-            val rows = ceil(n.toDouble() / cols).toInt()
-            val cellW = (width - gap * (cols + 1)) / cols
-            val cellH = (height - gap * (rows + 1)) / rows
+            val plan = rowPlan(mainIds.size, landscape = width > height)
+            val cellH = (height - gap * (plan.size + 1)) / plan.size
 
-            if (cellW > 0 && cellH > 0) {
-                // Center the whole block vertically when the grid leaves unused space.
-                val blockH = rows * cellH + (rows - 1) * gap
-                val topPad = ((height - blockH) / 2).coerceAtLeast(gap)
-
-                mainIds.forEachIndexed { index, peerId ->
-                    val tile = tiles[peerId] ?: return@forEachIndexed
-                    tile.frame.visibility = View.VISIBLE
-                    val row = index / cols
-                    val col = index % cols
-                    val inRow = min(cols, n - row * cols)
-                    // Center a partial last row so the odd tile sits in the middle.
-                    val rowWidth = inRow * cellW + (inRow - 1) * gap
-                    val leftPad = ((width - rowWidth) / 2).coerceAtLeast(gap)
-
-                    val lp = tile.frame.layoutParams as FrameLayout.LayoutParams
-                    lp.width = cellW
-                    lp.height = cellH
-                    lp.leftMargin = leftPad + col * (cellW + gap)
-                    lp.topMargin = topPad + row * (cellH + gap)
-                    lp.rightMargin = 0
-                    lp.bottomMargin = 0
-                    tile.frame.layoutParams = lp
+            if (cellH > 0) {
+                var index = 0
+                plan.forEachIndexed { row, inRow ->
+                    // Per-row width, not one global column width: this is what lets the odd
+                    // tile of a 3- or 5-person meeting span the whole row.
+                    val cellW = (width - gap * (inRow + 1)) / inRow
+                    val top = gap + row * (cellH + gap)
+                    repeat(inRow) { col ->
+                        val tile = tiles[mainIds[index++]].takeIf { cellW > 0 } ?: return@repeat
+                        tile.frame.visibility = View.VISIBLE
+                        val lp = tile.frame.layoutParams as FrameLayout.LayoutParams
+                        lp.width = cellW
+                        lp.height = cellH
+                        lp.leftMargin = gap + col * (cellW + gap)
+                        lp.topMargin = top
+                        lp.rightMargin = 0
+                        lp.bottomMargin = 0
+                        tile.frame.layoutParams = lp
+                    }
                 }
             }
         }

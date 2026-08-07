@@ -15,7 +15,7 @@
     android:background="@color/meshcall_black"
     android:orientation="vertical">
 
-    <!-- Top bar: meeting code, live timer, participants + flip-camera actions -->
+    <!-- Top bar: meeting code, live timer, participants. Flip camera moved to the bar. -->
     <LinearLayout
         android:id="@+id/meshcall_top_bar"
         android:layout_width="match_parent"
@@ -76,17 +76,6 @@
                 android:padding="10dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/meshcall_ic_groups" />
-
-            <ImageButton
-                android:id="@+id/meshcall_btn_switch_camera"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_marginStart="10dp"
-                android:background="@drawable/meshcall_bg_icon_btn"
-                android:contentDescription="@string/meshcall_desc_switch_camera"
-                android:padding="10dp"
-                android:scaleType="fitCenter"
-                android:src="@drawable/meshcall_ic_flip_camera" />
         </LinearLayout>
 
         <View
@@ -201,24 +190,28 @@
         android:paddingHorizontal="8dp"
         android:paddingVertical="14dp">
 
+        <!--
+          Six controls at 56dp would need 404dp of width and clip on a 360dp phone, so the
+          bar runs at 48dp with 8dp gaps: 346dp, and the icons keep a 44dp+ touch target.
+        -->
         <ImageButton
             android:id="@+id/meshcall_btn_mic"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/meshcall_bg_control"
             android:contentDescription="@string/meshcall_desc_mic"
-            android:padding="16dp"
+            android:padding="13dp"
             android:scaleType="fitCenter"
             android:src="@drawable/meshcall_ic_mic" />
 
         <ImageButton
             android:id="@+id/meshcall_btn_camera"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginStart="10dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
             android:background="@drawable/meshcall_bg_control"
             android:contentDescription="@string/meshcall_desc_camera"
-            android:padding="16dp"
+            android:padding="13dp"
             android:scaleType="fitCenter"
             android:src="@drawable/meshcall_ic_videocam_on" />
 
@@ -229,34 +222,51 @@
         -->
         <ImageButton
             android:id="@+id/meshcall_btn_audio_route"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginStart="10dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
             android:background="@drawable/meshcall_bg_control"
             android:contentDescription="@string/meshcall_desc_audio_route"
-            android:padding="16dp"
+            android:padding="13dp"
             android:scaleType="fitCenter"
             android:src="@drawable/meshcall_ic_route_speaker" />
 
+        <!--
+          Flip camera sits with the other per-meeting media controls rather than in the
+          top bar, next to the camera toggle it belongs with. The icon shows the lens
+          that is currently live (front / rear), so the bar states which camera peers
+          are seeing instead of only offering a flip.
+        -->
+        <ImageButton
+            android:id="@+id/meshcall_btn_switch_camera"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/meshcall_bg_control"
+            android:contentDescription="@string/meshcall_desc_switch_camera"
+            android:padding="13dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/meshcall_ic_camera_front" />
+
         <ImageButton
             android:id="@+id/meshcall_btn_more"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginStart="10dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
             android:background="@drawable/meshcall_bg_control"
             android:contentDescription="@string/meshcall_desc_more"
-            android:padding="16dp"
+            android:padding="13dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/meshcall_ic_more_horiz" />
+            android:src="@drawable/meshcall_ic_more" />
 
         <ImageButton
             android:id="@+id/meshcall_btn_leave"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginStart="12dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="10dp"
             android:background="@drawable/meshcall_bg_control_danger"
             android:contentDescription="@string/meshcall_desc_leave"
-            android:padding="16dp"
+            android:padding="13dp"
             android:scaleType="fitCenter"
             android:src="@drawable/meshcall_ic_call_end" />
     </LinearLayout>

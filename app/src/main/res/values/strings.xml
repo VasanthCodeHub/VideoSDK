@@ -2,6 +2,17 @@
     <string name="app_name">VideoCall</string>
     <string name="app_brand">Soft Suave</string>
 
+    <!-- Name entry (no accounts; just the label other participants see) -->
+    <string name="name_entry_title">Let\'s get you set up</string>
+    <string name="name_entry_subtitle">Every great meeting starts with a name. Yours is what everyone sees the moment you walk in.</string>
+    <string name="name_entry_action">Get started</string>
+    <string name="name_edit_title">Change how you appear</string>
+    <string name="name_edit_subtitle">Update the name your teammates see in every meeting you join.</string>
+    <string name="name_edit_action">Save</string>
+    <string name="your_name_hint">Your name</string>
+    <string name="enter_your_name">Enter your name to continue</string>
+    <string name="change_name">Change your name</string>
+
     <!-- Lobby -->
     <string name="lobby_subtitle">Create a meeting to start a call, or join one with a shared meeting code.</string>
     <string name="create_meeting">Create Meeting</string>

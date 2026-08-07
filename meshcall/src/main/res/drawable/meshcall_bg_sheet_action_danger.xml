@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Filled action button in a sheet: the destructive choice (leave the meeting). -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33FFFFFF">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/meshcall_danger" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+</ripple>

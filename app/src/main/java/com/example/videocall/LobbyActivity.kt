@@ -15,6 +15,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.videocall.data.MeetingHistoryRepository
+import com.example.videocall.data.UserPreferences
 import com.example.videocall.databinding.ActivityLobbyBinding
 import com.example.videocall.databinding.DialogCreateMeetingBinding
 import com.example.videocall.databinding.DialogJoinMeetingBinding
@@ -32,6 +33,7 @@ class LobbyActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLobbyBinding
     private val repository by lazy { MeetingHistoryRepository(applicationContext) }
+    private val userPreferences by lazy { UserPreferences(applicationContext) }
     private val adapter = RecentMeetingAdapter()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,12 +44,20 @@ class LobbyActivity : AppCompatActivity() {
 
         binding.btnCreateMeeting.setOnClickListener { showCreateMeetingDialog() }
         binding.btnJoinMeeting.setOnClickListener { showJoinDialog() }
+        binding.btnProfile.setOnClickListener {
+            startActivity(
+                Intent(this, NameEntryActivity::class.java)
+                    .putExtra(NameEntryActivity.EXTRA_EDIT, true),
+            )
+        }
         binding.recentMeetingsList.layoutManager = LinearLayoutManager(this)
         binding.recentMeetingsList.adapter = adapter
     }
 
     override fun onResume() {
         super.onResume()
+        // Re-read on resume: the name screen may have just changed it.
+        binding.profileName.text = userPreferences.displayName
         loadRecentMeetings()
     }
 
@@ -148,7 +158,7 @@ class LobbyActivity : AppCompatActivity() {
                 .putExtra(EXTRA_BROKER, DEFAULT_BROKER)
                 .putExtra(EXTRA_MEETING, meetingCode)
                 .putExtra(EXTRA_TITLE, title)
-                .putExtra(EXTRA_NAME, Build.MODEL),
+                .putExtra(EXTRA_NAME, userPreferences.displayName),
         )
     }
 

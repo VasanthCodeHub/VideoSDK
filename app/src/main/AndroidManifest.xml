@@ -18,8 +18,13 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.VideoCall">
+        <!--
+            Launcher: asks for the display name on first run, then forwards to the lobby.
+            Once a name is stored it finishes without drawing, so it costs nothing on
+            subsequent launches.
+        -->
         <activity
-            android:name=".LobbyActivity"
+            android:name=".NameEntryActivity"
             android:exported="true"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize">
@@ -29,6 +34,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".LobbyActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize" />
         <!--
             Portrait-locked, and non-orientation config changes are handled in-place.
             A full recreate here tears down the call: onDestroy disposes the MeshCall,

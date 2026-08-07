@@ -37,9 +37,11 @@ framerate collapses, the battery drains.
 - **7+** needs an **SFU** (each phone uploads once, the server fans out) — an architecture
   change, planned for later, not a tuning exercise.
 
-The UI is already built for the larger case regardless: four main tiles plus an overflow
-strip of avatar chips, with pinned and actively-speaking participants promoted into the
-grid.
+The UI is already built for the larger case regardless: the grid pairs tiles per row and
+gives a leftover odd tile the full row width, shrinking every row as people join, so a
+5–6 person meeting still shows everybody. Only past nine tiles does the tail move to an
+overflow strip of avatar chips, with pinned and actively-speaking participants promoted
+back into the grid.
 
 ---
 
@@ -47,7 +49,7 @@ grid.
 
 ```
 :meshcall   The SDK (dev.meshcall.sdk) — WebRTC engine, signaling, mesh, and the whole meeting UI
-:app        Host app (com.example.videocall) — lobby, meeting creation, permissions
+:app        Host app (com.example.videocall) — name entry, lobby, meeting creation, permissions
 server/     Node.js signaling broker (VC-019) — separate repo: VideoSDKServer/server/
 ```
 
@@ -139,6 +141,8 @@ sends the offer**; the other waits. No rollback, no glare handling. Do not break
 ### Data flow
 
 ```
+NameEntryActivity ─(display name → SharedPreferences)─► LobbyActivity
+                                                  │
 LobbyActivity ──(meetingId, broker, name)──► MainActivity
                                                   │
                               permissions → MeshCall.join()
@@ -276,11 +280,11 @@ symmetric NAT.
 | VC-003 | Participant list | Panel with live state and count, excludes self |
 | VC-005 | Meeting timer | `hh:mm:ss` next to the code badge |
 | VC-006 | **STUN/TURN configuration** | `MeshCallConfig.iceServers`; Google STUN default |
-| VC-009 | Responsive tile grid + landscape | Non-overlapping cells, reflows on resize |
+| VC-009 | Responsive tile grid + landscape | Non-overlapping cells, reflows on resize; rows of pairs, odd tile takes the full row |
 | VC-011 | Copy meeting code in-meeting | Tap the badge |
 | VC-016 | Active-speaker detection | RMS from remote audio tracks; speaker promoted into the grid |
 | VC-017 | Pin a participant | Tap a tile or overflow chip |
-| VC-018 | Overflow strip | Participants beyond 4 main slots become avatar chips |
+| VC-018 | Overflow strip | Participants beyond 9 grid tiles become avatar chips |
 | VC-020 | **Meeting UI moved into the SDK** | `MeshMeetingView` owns the screen; the app is lobby + permissions |
 | VC-019 | **Node.js signaling broker** | Implements §4 exactly; in-memory, single-process, Socket.IO v4. See `VideoSDKServer/server/` (separate repo) |
 | VC-022 | **Audio output routing** | Speaker / Bluetooth / wired / earpiece behind one control-bar button; `AudioRouteController` owns mode, focus and device changes. No Bluetooth permission needed |
@@ -404,8 +408,8 @@ surfaces the banner (not silence) · custom server URL accepted.
 cleanly · local "You" tile visible · offer/answer exchanged · ICE reaches CONNECTED ·
 remote video visible · remote audio audible · mic toggle updates the remote badge · camera
 toggle likewise · switch camera does not drop the meeting · tap a tile to pin · active
-speaker gets the ring and is promoted · 5th+ participant appears in the overflow strip ·
-leave removes the tile remotely · leaving frees resources with no leak.
+speaker gets the ring · 3rd and 5th participants each take a full-width row and the grid
+shrinks to fit · leave removes the tile remotely · leaving frees resources with no leak.
 
 **Robustness** — peer joins mid-meeting · peer leaves mid-meeting · network drop
 reconnects and resumes · re-joining the same meeting is a no-op · ICE failure re-links

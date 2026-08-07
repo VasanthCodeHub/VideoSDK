@@ -12,6 +12,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.videocall.data.MeetingHistoryRepository
+import com.example.videocall.data.UserPreferences
 import com.example.videocall.databinding.ActivityMainBinding
 import dev.meshcall.sdk.api.IceServerConfig
 import dev.meshcall.sdk.api.LocalIdentityProvider
@@ -36,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private var call: MeshCall? = null
     private lateinit var binding: ActivityMainBinding
     private val historyRepository by lazy { MeetingHistoryRepository(applicationContext) }
+    private val userPreferences by lazy { UserPreferences(applicationContext) }
 
     private var meetingCode: String = ""
     private var meetingTitle: String = ""
@@ -91,7 +93,10 @@ class MainActivity : AppCompatActivity() {
     private fun startMeeting() {
         val broker = intent.getStringExtra(EXTRA_BROKER) ?: DEFAULT_BROKER
         val meetingId = intent.getStringExtra(EXTRA_MEETING) ?: DEFAULT_MEETING
-        val name = intent.getStringExtra(EXTRA_NAME) ?: Build.MODEL
+        // The name the lobby stored; Build.MODEL only backstops an adb launch with no
+        // -e name and no name saved yet.
+        val name = intent.getStringExtra(EXTRA_NAME)?.takeIf { it.isNotBlank() }
+            ?: userPreferences.displayName.ifBlank { Build.MODEL }
 
         meetingCode = meetingId
         meetingTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()

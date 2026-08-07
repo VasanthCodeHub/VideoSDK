@@ -39,8 +39,8 @@ import java.util.Locale
  *
  * Drop this into a layout (or set it as the content view), call [attach] with a joined
  * [MeshCall], and the host is done: the video grid, meeting-code badge, call timer,
- * signaling banner, participants panel, and the mic / camera / audio-output / more / leave
- * controls are all handled here.
+ * signaling banner, participants panel, and the mic / camera / audio-output / flip-camera /
+ * more / leave controls are all handled here.
  *
  * The host keeps only what genuinely belongs to it: runtime permissions, navigation, and
  * deciding what "share screen" should do.
@@ -218,6 +218,7 @@ class MeshMeetingView @JvmOverloads constructor(
                 )
             }
         }
+        viewScope.launch { call.frontCameraActive.collect(::applySwitchCameraButton) }
         viewScope.launch {
             call.audioRoute.collect { state ->
                 audioRouteState = state
@@ -261,13 +262,21 @@ class MeshMeetingView @JvmOverloads constructor(
         onLeave?.invoke()
     }
 
+    /**
+     * Leaving is confirmed on the SDK's own sheet, not a platform `AlertDialog`: the
+     * dialog inherits the *host* app's theme, so the same meeting screen ended up with a
+     * different-looking, usually light, box depending on who embedded the SDK.
+     */
     private fun confirmLeave() {
-        android.app.AlertDialog.Builder(context)
-            .setTitle(R.string.meshcall_leave_title)
-            .setMessage(R.string.meshcall_leave_message)
-            .setPositiveButton(R.string.meshcall_leave_confirm) { _, _ -> leaveNow() }
-            .setNegativeButton(R.string.meshcall_cancel, null)
-            .show()
+        MeshBottomSheet(context).apply {
+            addHeadline(
+                iconRes = R.drawable.meshcall_ic_call_end,
+                titleRes = R.string.meshcall_leave_title,
+                messageRes = R.string.meshcall_leave_message,
+            )
+            addAction(R.string.meshcall_leave_confirm, danger = true) { leaveNow() }
+            addAction(R.string.meshcall_cancel) {}
+        }.show()
     }
 
     // ---- Chrome -----------------------------------------------------------------
@@ -375,6 +384,24 @@ class MeshMeetingView @JvmOverloads constructor(
             if (cameraOn) R.drawable.meshcall_bg_control else R.drawable.meshcall_bg_control_danger,
         )
         cameraButton.imageTintList = ColorStateList.valueOf(color(R.color.meshcall_white))
+    }
+
+    /**
+     * The flip button reports the lens that is *currently* live rather than the one a tap
+     * would switch to. A control that shows the state it is in matches the mic and camera
+     * buttons beside it; showing the destination instead would make the bar contradict
+     * itself the moment someone reads it as a status row.
+     */
+    private fun applySwitchCameraButton(frontActive: Boolean) {
+        switchCameraButton.setImageResource(
+            if (frontActive) R.drawable.meshcall_ic_camera_front
+            else R.drawable.meshcall_ic_camera_rear,
+        )
+        switchCameraButton.contentDescription = context.getString(
+            if (frontActive) R.string.meshcall_desc_switch_to_rear
+            else R.string.meshcall_desc_switch_to_front,
+        )
+        switchCameraButton.imageTintList = ColorStateList.valueOf(color(R.color.meshcall_white))
     }
 
     /**

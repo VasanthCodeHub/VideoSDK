@@ -26,6 +26,8 @@
     <string name="meshcall_desc_mic">Toggle microphone</string>
     <string name="meshcall_desc_camera">Toggle camera</string>
     <string name="meshcall_desc_switch_camera">Switch camera</string>
+    <string name="meshcall_desc_switch_to_rear">Front camera in use, switch to rear</string>
+    <string name="meshcall_desc_switch_to_front">Rear camera in use, switch to front</string>
     <string name="meshcall_desc_participants">Participants</string>
     <string name="meshcall_desc_share">Share screen</string>
     <string name="meshcall_desc_more">More options</string>
@@ -54,7 +56,7 @@
 
     <!-- Leave confirmation -->
     <string name="meshcall_leave_title">Leave meeting?</string>
-    <string name="meshcall_leave_message">You will be disconnected from this meeting.</string>
+    <string name="meshcall_leave_message">Everyone else stays in the meeting. You can rejoin with the same code.</string>
     <string name="meshcall_leave_confirm">Leave</string>
     <string name="meshcall_cancel">Cancel</string>
 
