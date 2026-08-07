@@ -21,27 +21,38 @@ times** — it never relays anyone else's. A fixed per-link cap therefore multip
 people at 1 Mbps each is 4 Mbps off one phone, well past a normal uplink, and congestion
 control then claws it back unevenly until every tile goes soft at once.
 
-So the cap is not fixed. The SDK splits an **uplink budget** (3 Mbps by default) across the
-live links and steps capture resolution down with it, keeping bits-per-pixel roughly
+So the cap is not fixed. The SDK splits an **uplink budget** (4 Mbps by default) across the
+live links and steps the encoded resolution down with it, holding **bits per pixel** roughly
 constant — a smaller, sharp picture instead of a mushy 720p one. It retunes the instant
 somebody joins or leaves:
 
-| People | Uplinks each | Per link | Encoded at | Upload | Concurrent encoders |
-|--------|--------------|----------|------------|--------|---------------------|
-| 2 | 1 | 1000 kbps | 720p | ~1.0 Mbps | 1 |
-| 3 | 2 | 1000 kbps | 720p | ~2.0 Mbps | 2 |
-| 4 | 3 | 1000 kbps | 720p | ~3.0 Mbps | 3 |
-| 5 | 4 | 750 kbps | 540p | ~3.0 Mbps | 4 |
-| 6 | 5 | 600 kbps | 540p | ~3.0 Mbps | 5 |
-| 8 | 7 | 450 kbps (floor) | 480p | ~3.2 Mbps | 7 |
+| People | Uplinks each | Per link | Encoded at | bpp | Upload | Concurrent encoders |
+|--------|--------------|----------|------------|-----|--------|---------------------|
+| 2 | 1 | 1500 kbps | 540p | 0.121 | ~1.5 Mbps | 1 |
+| 3 | 2 | 1500 kbps | 540p | 0.121 | ~3.0 Mbps | 2 |
+| 4 | 3 | 1333 kbps | 540p | 0.107 | ~4.0 Mbps | 3 |
+| 5 | 4 | 1000 kbps | 540p | 0.080 | ~4.0 Mbps | 4 |
+| 6 | 5 | 800 kbps | 480p | 0.082 | ~4.0 Mbps | 5 |
+| 8 | 7 | 571 kbps | 360p | 0.103 | ~4.0 Mbps | 7 |
 
-At the default budget the split only bites from the **fourth link on** — two, three and four
-participants each get the full 1000 kbps ceiling at 720p, exactly as they did before the
-ladder existed. That restraint is deliberate: see pitfall 14.
+**Bits per pixel is the column that matters.** Sharpness is bitrate divided by
+pixels-per-second, and realtime video needs about **0.08 bpp** to stop looking smeared;
+every rung above clears it. An earlier revision of this ladder sent 720p30 under a 1000 kbps
+ceiling, which is 0.036 bpp — less than half what the frame needed — so the encoder smeared
+every frame to fit. Because that happens on the *very first link*, two-person calls looked
+just as soft as five-person ones, which disguised a plain bitrate shortfall as a mesh
+scaling problem. Capture stays at 720p (a format every camera supports); `adaptOutputFormat`
+scales to the tier on the way to the encoder.
+
+Frame rate is **24, not 30**, for the same reason: bitrate buys either motion or detail, and
+a grid of faces wants detail.
 
 Every number in that table is a **ceiling, never a target**. Congestion control measures the
-link and picks the send rate underneath it, and frame rate is left entirely to libwebrtc's
-own degradation logic. Nothing here seeds or overrides the bandwidth estimate.
+link and picks the send rate underneath it; nothing here seeds or overrides the bandwidth
+estimate. What the SDK *does* pin is the direction the encoder gives ground —
+`degradationPreference = MAINTAIN_RESOLUTION`, so a weak link costs frame rate rather than
+sharpness. Resolution is already sized to the budget by the ladder, so letting libwebrtc's
+default BALANCED shed it first would undo that work and bring the soft picture back.
 
 Bandwidth is the lesser problem. The wall is **hardware encoders**: each PeerConnection
 runs its own encoder instance, and most Android SoCs support only ~2–4 concurrent
@@ -480,9 +491,11 @@ speaker gets the ring · 3rd and 5th participants each take a full-width row and
 shrinks to fit · leave removes the tile remotely · leaving frees resources with no leak.
 
 **Video quality** — `MeshCall/Engine` logs a `video tier for N link(s)` line on every join
-and leave · 2–4 participants stay at `1280x720 ≤1000kbps` · the tier climbs back up when
-peers drop · quality holds *steady* rather than alternating sharp and blocky (see pitfall
-14) · a shared screen stays legible at 5 people.
+and leave · 2–3 participants stay at `960x540 ≤1500kbps`, 5 participants at
+`960x540 ≤1000kbps` · the tier climbs back up when peers drop · quality holds *steady*
+rather than alternating sharp and blocky (see pitfall 14) · under a weak link video goes
+choppy rather than soft (that is `MAINTAIN_RESOLUTION` working, §1) · a shared screen stays
+legible at 5 people.
 
 **Robustness** — peer joins mid-meeting · peer leaves mid-meeting · network drop
 reconnects and resumes · re-joining the same meeting is a no-op · ICE failure re-links

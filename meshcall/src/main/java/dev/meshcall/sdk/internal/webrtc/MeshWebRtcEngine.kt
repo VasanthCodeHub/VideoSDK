@@ -24,6 +24,7 @@ import org.webrtc.MediaConstraints
 import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
+import org.webrtc.RtpParameters
 import org.webrtc.RtpReceiver
 import org.webrtc.RtpSender
 import org.webrtc.RtpTransceiver
@@ -367,17 +368,36 @@ internal class MeshWebRtcEngine(
      * configured capture size is always the ceiling — a host that asked for 480p never
      * gets 720p because the meeting happens to be small.
      *
-     * The thresholds are calibrated so the default 1000 kbps ceiling lands on 720p: at the
-     * default budget nothing steps down until the fourth link (five participants), and
-     * meetings smaller than that encode exactly as they did before this ladder existed.
+     * Each threshold is the bitrate that rung needs to hold ~0.08 bits per pixel at 24fps,
+     * which is about where realtime video stops looking smeared:
+     *
+     * ```
+     *   1280x720 @24 = 22.1M px/s  ->  ~1770 kbps
+     *    960x540 @24 = 12.4M px/s  ->   ~995 kbps
+     *    848x480 @24 =  9.8M px/s  ->   ~780 kbps
+     *    640x360 @24 =  5.5M px/s  ->   ~440 kbps
+     * ```
+     *
+     * Read that table the other way and it explains the bug this ladder was recut to fix:
+     * 720p only earns its pixels above ~1.7 Mbps, so encoding 720p under a 1000 kbps
+     * ceiling — as the previous thresholds did at every size up to five people — spent the
+     * whole budget on pixels it could not afford to describe. Every tile went soft, and
+     * because that happens on the *first* link it looked nothing like a mesh scaling
+     * problem. Stepping down to a rung the bitrate can actually carry is what makes the
+     * picture sharp; the frame is smaller, but a phone-sized grid tile was going to
+     * downscale it anyway.
+     *
+     * Consequence worth knowing: at the default 1500 kbps ceiling the 720p rung is
+     * unreachable by design. It exists for a host that raises [MediaConfig.maxVideoKbps]
+     * past 1700 knowing it has the uplink for it.
      */
     private fun tierForLinks(links: Int): VideoTier {
         val kbps = perLinkKbps(links)
         // Uncapped (maxVideoKbps = 0) means the host took the wheel: capture as configured.
         val rung = when {
-            kbps <= 0 || kbps >= 850 -> 1280 to 720
-            kbps >= 600 -> 960 to 540
-            kbps >= 450 -> 848 to 480
+            kbps <= 0 || kbps >= 1700 -> 1280 to 720
+            kbps >= 1000 -> 960 to 540
+            kbps >= 700 -> 848 to 480
             else -> 640 to 360
         }
         return VideoTier(
@@ -399,6 +419,9 @@ internal class MeshWebRtcEngine(
      * rate under this bound, which is the one thing in the stack that knows what the
      * network can actually carry. See the note on [MIN_PER_LINK_KBPS].
      *
+     * The [DEGRADATION_PREFERENCE] set alongside it decides *how* the encoder gives ground
+     * when the link turns out to be worse than the tier assumed — see that constant.
+     *
      * Senders are matched by kind rather than against [localVideoTrack]: while sharing, the
      * attached track is the screen, and identity matching skipped it — so screen share used
      * to go out completely uncapped.
@@ -411,6 +434,7 @@ internal class MeshWebRtcEngine(
             val params = sender.parameters ?: return@forEach
             if (params.encodings.isEmpty()) return@forEach
             params.encodings.forEach { it.maxBitrateBps = kbps * 1000 }
+            params.degradationPreference = DEGRADATION_PREFERENCE
             if (!sender.setParameters(params)) {
                 MeshLog.w(TAG, "setParameters failed; video sender left at encoder defaults")
             }
@@ -1035,7 +1059,25 @@ internal class MeshWebRtcEngine(
         const val MIN_PER_LINK_KBPS = 450
 
         /** Bitrate floor while sharing a screen, where legible text needs the headroom. */
-        const val SCREEN_MIN_KBPS = 900
+        const val SCREEN_MIN_KBPS = 1200
+
+        /**
+         * How the encoder gives ground when the measured link is worse than the tier
+         * assumed.
+         *
+         * [RtpParameters.DegradationPreference.MAINTAIN_RESOLUTION] holds the frame size and
+         * sheds frame rate. libwebrtc's default is BALANCED, which sheds resolution first —
+         * and resolution is the one thing already sized to the budget by [tierForLinks], so
+         * letting it slide undoes that work and reintroduces the soft picture from the other
+         * direction. Faces in a small grid tile read fine at a lower frame rate and badly
+         * out of focus, and a shared screen is text, which is the same trade only starker.
+         *
+         * The cost is real and worth knowing: on a link that collapses far below its tier
+         * this trades smoothness away hard, and video can get visibly choppy rather than
+         * merely soft. If that turns out to be the wrong bargain for real users, BALANCED
+         * here is the whole revert.
+         */
+        val DEGRADATION_PREFERENCE = RtpParameters.DegradationPreference.MAINTAIN_RESOLUTION
 
         /** Bound the pre-remote-description candidate buffer. */
         const val MAX_PENDING_CANDIDATES = 128
