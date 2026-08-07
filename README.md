@@ -53,7 +53,7 @@ server/     Node.js signaling broker (VC-019) — separate repo: VideoSDKServer/
 
 **The SDK owns the meeting screen.** Everything a meeting *looks* like — video grid,
 meeting-code badge, call timer, connection banner, participants panel, and the mic /
-camera / switch-camera / share / more / leave controls — is `MeshMeetingView`. The app
+camera / audio-output / more / leave controls — is `MeshMeetingView`. The app
 keeps only what genuinely belongs to a host: runtime permissions, identity, navigation,
 and the lobby.
 
@@ -283,12 +283,15 @@ symmetric NAT.
 | VC-018 | Overflow strip | Participants beyond 4 main slots become avatar chips |
 | VC-020 | **Meeting UI moved into the SDK** | `MeshMeetingView` owns the screen; the app is lobby + permissions |
 | VC-019 | **Node.js signaling broker** | Implements §4 exactly; in-memory, single-process, Socket.IO v4. See `VideoSDKServer/server/` (separate repo) |
+| VC-022 | **Audio output routing** | Speaker / Bluetooth / wired / earpiece behind one control-bar button; `AudioRouteController` owns mode, focus and device changes. No Bluetooth permission needed |
+| VC-023 | **Screen share** | Replaces the camera on the existing sender via `setTrack` — no renegotiation, no new signaling. Foreground service (`mediaProjection`) + host-supplied consent Intent. Remote tiles crop it; see Partial |
 
 ### Partial
 
 | ID | Feature | Remaining |
 |----|---------|-----------|
 | VC-004 | Connection status indicator | Per-peer ICE dots + broker banner ship; **peer disconnect/reconnect toast** pending |
+| VC-023 | Screen share | Works end to end, but **receivers do not know a tile is a screen**: their renderer stays on `SCALE_ASPECT_FILL` and crops it. Fix needs a `sharing` flag on `peer-state` (broker change, separate repo) so remote tiles can switch to `SCALE_ASPECT_FIT` — the sharer's own tile already does |
 
 ### Not started
 
@@ -363,6 +366,13 @@ Mandatory, not suggestions.
    and dedupe, or remote video is unreliable across WebRTC revisions.
 6. `b=AS:` must sit **inside** a media section, directly after its `c=` line. Appending it
    to the end of the SDP is silently ignored — the bitrate cap simply never applies.
+7. MediaProjection needs a foreground service of type `mediaProjection` **already running**
+   before the projection is requested (Android 10+, enforced from 14). Requesting it first
+   throws — hence `MeshScreenShareService.start(context) { ...capture... }` starting capture
+   from the ready callback rather than inline.
+8. `RtpSender.setTrack` swaps a same-kind track with **no renegotiation**. That is what makes
+   screen share cheap here; adding a second video track instead would need a new transceiver,
+   a fresh offer/answer to every peer, and a signaling change.
 7. `addIceCandidate` before `setRemoteDescription` is rejected. Candidates and SDP race
    over the same socket, so inbound candidates must be buffered until the remote
    description lands, or ICE never completes.

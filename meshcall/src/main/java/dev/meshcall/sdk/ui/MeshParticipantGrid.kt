@@ -88,6 +88,9 @@ class MeshParticipantGrid(
     private var localMicOn = true
     private var localCamOn = true
 
+    /** True while the local tile is showing a shared screen rather than the camera. */
+    private var localSharing = false
+
     /**
      * Invoked when the user taps a tile or overflow chip. The host decides the new pin
      * state and calls [setPinned] — typically a toggle.
@@ -164,6 +167,24 @@ class MeshParticipantGrid(
                         streamsByPeer.remove(event.peerId)
                         bindPeerStream(event.peerId, null)
                     }
+
+                    is MeshMeetingManager.MediaEvent.LocalVideoChanged -> {
+                        localSharing = manager.screenSharing.value
+                        tiles[LOCAL_PEER_ID]?.let { bindTrack(it, event.track) }
+                        localPreview()?.apply {
+                            // A shared screen is not a selfie: mirroring reverses every
+                            // word on it.
+                            setMirror(!localSharing && manager.frontCameraActive.value)
+                            // FIT, not FILL, while sharing: a phone screen is far taller
+                            // than a grid tile, and cropping it to fill would cut off the
+                            // very content being shared.
+                            setScalingType(
+                                if (localSharing) RendererCommon.ScalingType.SCALE_ASPECT_FIT
+                                else RendererCommon.ScalingType.SCALE_ASPECT_FILL,
+                            )
+                        }
+                        applyLocalChrome()
+                    }
                 }
             }
         }
@@ -213,10 +234,16 @@ class MeshParticipantGrid(
         val egl = eglContext ?: return
         val preview = localPreview() ?: return
         initRenderer(preview, egl)
-        preview.setMirror(true)
+        preview.setMirror(manager.frontCameraActive.value)
         ensureLocalTile(preview)
         bindTrack(tiles[LOCAL_PEER_ID] ?: return, manager.localVideo())
         applyLocalChrome()
+
+        scope.launch {
+            manager.frontCameraActive.collect { isFront ->
+                localPreview()?.setMirror(!localSharing && isFront)
+            }
+        }
     }
 
     /** Wrap the host's preview into a regular grid tile labelled "You". */
@@ -231,10 +258,15 @@ class MeshParticipantGrid(
 
     private fun applyLocalChrome() {
         val tile = tiles[LOCAL_PEER_ID] ?: return
-        tile.chip.text = context.getString(R.string.meshcall_you)
+        tile.chip.text = context.getString(
+            if (localSharing) R.string.meshcall_you_are_sharing else R.string.meshcall_you,
+        )
         applyMicIndicator(tile.micBadge, localMicOn)
-        tile.camBadge.visibility = visibleIf(!localCamOn)
-        tile.placeholder.visibility = visibleIf(!localCamOn)
+        // While sharing, the camera badge and the avatar placeholder both describe a camera
+        // nobody is watching — the tile is carrying the screen. Showing them would read as
+        // "sharing is broken".
+        tile.camBadge.visibility = visibleIf(!localCamOn && !localSharing)
+        tile.placeholder.visibility = visibleIf(!localCamOn && !localSharing)
         tile.dot.setBackgroundResource(R.drawable.dot_connected)
     }
 
@@ -300,12 +332,6 @@ class MeshParticipantGrid(
 
         val placeholder = buildPlaceholder(name, peerId).apply { visibility = View.GONE }
         frame.addView(placeholder, matchParent())
-
-        // Bottom fade that keeps the name chip readable over any video.
-        frame.addView(
-            View(context).apply { setBackgroundResource(R.drawable.bg_tile_overlay) },
-            matchParent(),
-        )
 
         val chip = TextView(context).apply {
             setTextColor(Color.WHITE)

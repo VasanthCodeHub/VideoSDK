@@ -23,9 +23,10 @@ import kotlinx.coroutines.launch
  * Host for the in-meeting screen.
  *
  * Everything the meeting *looks* like — video grid, meeting-code badge, timer, signaling
- * banner, participants panel, mic / camera / switch-camera / share / more / leave controls
- * — belongs to the SDK's [MeshMeetingView]. This activity keeps only what genuinely
- * belongs to the host app: runtime permissions, identity, and navigation.
+ * banner, participants panel, mic / camera / audio-output / more / leave controls —
+ * belongs to the SDK's [MeshMeetingView]. This activity keeps only what genuinely belongs
+ * to the host app: runtime permissions (including MediaProjection consent), identity, and
+ * navigation.
  *
  * Launch extras:
  *   -e broker ws://10.0.2.2:3000 -e meeting ABC123 -e name Alice
@@ -54,6 +55,19 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    /**
+     * MediaProjection consent. This stays in the host because only an Activity can ask for
+     * it — the SDK takes the resulting Intent and does the rest. The token is single-use, so
+     * the dialog appears on every share.
+     */
+    private val screenShareLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val data = result.data
+            if (result.resultCode == RESULT_OK && data != null) {
+                call?.startScreenShare(data)
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -61,11 +75,11 @@ class MainActivity : AppCompatActivity() {
         fitTopSafeArea()
 
         binding.meetingView.onLeave = { saveMeetingHistory(); finish() }
+        // onMoreOptions is left unset so the SDK's own "more" sheet is used; share is one
+        // of its entries and stays a host callback because MediaProjection consent has to
+        // be requested from an Activity.
         binding.meetingView.onShareScreen = {
-            Toast.makeText(this, R.string.share_coming_soon, Toast.LENGTH_SHORT).show()
-        }
-        binding.meetingView.onMoreOptions = {
-            Toast.makeText(this, R.string.more_coming_soon, Toast.LENGTH_SHORT).show()
+            screenShareLauncher.launch(MeshCall.screenCaptureIntent(this))
         }
 
         val missing = permissions.filter {

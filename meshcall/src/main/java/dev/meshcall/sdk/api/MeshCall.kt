@@ -1,6 +1,8 @@
 package dev.meshcall.sdk.api
 
 import android.content.Context
+import android.content.Intent
+import android.media.projection.MediaProjectionManager
 import dev.meshcall.sdk.internal.media.MediaConfig
 import dev.meshcall.sdk.internal.mesh.MeshMeetingManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -115,6 +117,25 @@ class MeshCall(context: Context) {
         manager?.localMedia ?: flowOf(LocalMediaState())
     }
 
+    /** True while the front camera is the one streaming — drives local preview mirroring. */
+    val frontCameraActive: Flow<Boolean> = managerFlow.flatMapLatest { manager ->
+        manager?.frontCameraActive ?: flowOf(true)
+    }
+
+    /**
+     * Which output the meeting is playing through, and which others are reachable right
+     * now. Emits again whenever a headset is connected or removed, so a route picker bound
+     * to this needs no polling.
+     */
+    val audioRoute: Flow<AudioRouteState> = managerFlow.flatMapLatest { manager ->
+        manager?.audioRoute ?: flowOf(AudioRouteState())
+    }
+
+    /** True while this device is sharing its screen instead of its camera. */
+    val screenSharing: Flow<Boolean> = managerFlow.flatMapLatest { manager ->
+        manager?.screenSharing ?: flowOf(false)
+    }
+
     /** Non-fatal errors worth surfacing (signaling drops, media failures). */
     val errors: Flow<String> = managerFlow.flatMapLatest { manager ->
         manager?.errors ?: emptyFlow()
@@ -127,6 +148,36 @@ class MeshCall(context: Context) {
     fun switchCamera() = meshManager?.switchCamera()
     fun setMic(enabled: Boolean) = meshManager?.setMic(enabled)
     fun setCamera(enabled: Boolean) = meshManager?.setCamera(enabled)
+
+    /**
+     * Move meeting audio to [route]. Ignored when that route is not in the current
+     * [AudioRouteState.available] list — there is nothing to route to.
+     */
+    fun selectAudioRoute(route: AudioRoute) = meshManager?.selectAudioRoute(route)
+
+    /**
+     * Start sharing the screen. The shared screen **replaces** this device's camera for
+     * everyone in the meeting — one outgoing video track, so no extra tile appears and no
+     * renegotiation is needed.
+     *
+     * [permissionData] is the `Intent` from the MediaProjection consent dialog, which only
+     * an Activity can request:
+     *
+     * ```
+     * private val shareLauncher = registerForActivityResult(StartActivityForResult()) { r ->
+     *     val data = r.data
+     *     if (r.resultCode == Activity.RESULT_OK && data != null) call.startScreenShare(data)
+     * }
+     * // from MeshMeetingView.onShareScreen:
+     * shareLauncher.launch(MeshCall.screenCaptureIntent(this))
+     * ```
+     *
+     * The consent token is single-use: a new one is needed for every share.
+     */
+    fun startScreenShare(permissionData: Intent) = meshManager?.startScreenShare(permissionData)
+
+    /** Stop sharing and put the camera back on every peer. Safe to call when not sharing. */
+    fun stopScreenShare() = meshManager?.stopScreenShare()
 
     /**
      * Ask [participantId] to mute their mic; honored automatically on their device.
@@ -154,8 +205,19 @@ class MeshCall(context: Context) {
     private val userId: String
         get() = LocalIdentityProvider.userId ?: DEFAULT_ANON_ID
 
-    private companion object {
-        const val DEFAULT_ANON_ID = "anonymous"
+    companion object {
+        private const val DEFAULT_ANON_ID = "anonymous"
+
+        /**
+         * The consent Intent to launch before [startScreenShare]. Wrapped here so hosts do
+         * not need to reach for `MediaProjectionManager` themselves.
+         */
+        @JvmStatic
+        fun screenCaptureIntent(context: Context): Intent {
+            val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE)
+                as MediaProjectionManager
+            return manager.createScreenCaptureIntent()
+        }
     }
 }
 

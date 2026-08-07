@@ -13,12 +13,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import dev.meshcall.sdk.R
+import dev.meshcall.sdk.api.AudioRoute
+import dev.meshcall.sdk.api.AudioRouteState
 import dev.meshcall.sdk.api.MeshCall
 import dev.meshcall.sdk.api.MeshParticipant
 import dev.meshcall.sdk.internal.util.MeshLog
@@ -36,11 +39,11 @@ import java.util.Locale
  *
  * Drop this into a layout (or set it as the content view), call [attach] with a joined
  * [MeshCall], and the host is done: the video grid, meeting-code badge, call timer,
- * signaling banner, participants panel, and the mic / camera / switch-camera / share /
- * more / leave controls are all handled here.
+ * signaling banner, participants panel, and the mic / camera / audio-output / more / leave
+ * controls are all handled here.
  *
  * The host keeps only what genuinely belongs to it: runtime permissions, navigation, and
- * deciding what "share screen" or "more" should do.
+ * deciding what "share screen" should do.
  *
  * ```
  * val meeting = MeshMeetingView(this)
@@ -75,7 +78,7 @@ class MeshMeetingView @JvmOverloads constructor(
     private val participantsList: LinearLayout
     private val micButton: ImageButton
     private val cameraButton: ImageButton
-    private val shareButton: ImageButton
+    private val audioRouteButton: ImageButton
     private val moreButton: ImageButton
     private val leaveButton: ImageButton
     private val participantsButton: ImageButton
@@ -90,22 +93,32 @@ class MeshMeetingView @JvmOverloads constructor(
     private var timerJob: Job? = null
     private var meetingStartedAt = 0L
 
+    /** Latest routing snapshot, so the picker can be built on tap without re-reading state. */
+    private var audioRouteState = AudioRouteState()
+
+    /** Mirrors [MeshCall.screenSharing]; decides whether "more" offers start or stop. */
+    private var screenSharing = false
+
     /** Invoked after the user confirms leaving. Navigate away here. */
     var onLeave: (() -> Unit)? = null
 
-    /** Invoked when "share screen" is tapped. Null hides the button. */
+    /**
+     * Invoked when "share screen" is tapped. Null hides the entry.
+     *
+     * Screen share lives in the "more" sheet, not the control bar: MediaProjection consent
+     * is an Activity-scoped flow the host has to run, so it is a host decision, and the bar
+     * is reserved for the controls used every meeting.
+     */
     var onShareScreen: (() -> Unit)? = null
-        set(value) {
-            field = value
-            shareButton.visibility = if (value == null) GONE else VISIBLE
-        }
 
-    /** Invoked when "more" is tapped. Null hides the button. */
+    /**
+     * Replace the built-in "more" sheet with the host's own menu.
+     *
+     * Left null — the recommended setup — "more" opens the SDK's sheet with screen share
+     * and the other secondary actions in it. Set this only when the host needs entries the
+     * SDK knows nothing about; it then owns the whole menu, including re-offering share.
+     */
     var onMoreOptions: (() -> Unit)? = null
-        set(value) {
-            field = value
-            moreButton.visibility = if (value == null) GONE else VISIBLE
-        }
 
     /**
      * Ask before leaving. Leave it on unless the host runs its own confirmation and calls
@@ -128,7 +141,7 @@ class MeshMeetingView @JvmOverloads constructor(
         participantsList = findViewById(R.id.meshcall_participants_list)
         micButton = findViewById(R.id.meshcall_btn_mic)
         cameraButton = findViewById(R.id.meshcall_btn_camera)
-        shareButton = findViewById(R.id.meshcall_btn_share)
+        audioRouteButton = findViewById(R.id.meshcall_btn_audio_route)
         moreButton = findViewById(R.id.meshcall_btn_more)
         leaveButton = findViewById(R.id.meshcall_btn_leave)
         participantsButton = findViewById(R.id.meshcall_btn_participants)
@@ -141,8 +154,11 @@ class MeshMeetingView @JvmOverloads constructor(
         micButton.setOnClickListener { call?.toggleMic() }
         cameraButton.setOnClickListener { call?.toggleCamera() }
         switchCameraButton.setOnClickListener { call?.switchCamera() }
-        shareButton.setOnClickListener { onShareScreen?.invoke() }
-        moreButton.setOnClickListener { onMoreOptions?.invoke() }
+        audioRouteButton.setOnClickListener { showAudioRoutePicker() }
+        moreButton.setOnClickListener {
+            val hostMenu = onMoreOptions
+            if (hostMenu != null) hostMenu() else showMoreSheet()
+        }
         participantsButton.setOnClickListener {
             participantsPanel.visibility =
                 if (participantsPanel.visibility == VISIBLE) GONE else VISIBLE
@@ -189,6 +205,23 @@ class MeshMeetingView @JvmOverloads constructor(
                 applyMicButton(state.micEnabled)
                 applyCameraButton(state.cameraEnabled)
                 participantGrid.setLocalMediaState(state.micEnabled, state.cameraEnabled)
+            }
+        }
+        viewScope.launch {
+            call.screenSharing.collect { sharing ->
+                screenSharing = sharing
+                // The "more" button carries the only stop control, so it has to advertise
+                // that something is running behind it.
+                moreButton.setBackgroundResource(
+                    if (sharing) R.drawable.meshcall_bg_control_active
+                    else R.drawable.meshcall_bg_control,
+                )
+            }
+        }
+        viewScope.launch {
+            call.audioRoute.collect { state ->
+                audioRouteState = state
+                applyAudioRouteButton(state)
             }
         }
         viewScope.launch {
@@ -240,10 +273,88 @@ class MeshMeetingView @JvmOverloads constructor(
     // ---- Chrome -----------------------------------------------------------------
 
     private fun setControlsEnabled(enabled: Boolean) {
-        listOf(micButton, cameraButton, switchCameraButton, participantsButton).forEach {
+        listOf(
+            micButton,
+            cameraButton,
+            switchCameraButton,
+            participantsButton,
+            audioRouteButton,
+        ).forEach {
             it.isEnabled = enabled
             it.alpha = if (enabled) 1f else 0.4f
         }
+    }
+
+    /**
+     * The button shows the *live* route, so the control bar answers "where is the sound
+     * going" without opening anything. It is highlighted whenever audio is anywhere other
+     * than the earpiece — that is the state worth noticing before you start talking.
+     */
+    private fun applyAudioRouteButton(state: AudioRouteState) {
+        audioRouteButton.setImageResource(state.selected.iconRes)
+        audioRouteButton.setBackgroundResource(
+            if (state.selected == AudioRoute.EARPIECE) R.drawable.meshcall_bg_control
+            else R.drawable.meshcall_bg_control_active,
+        )
+        audioRouteButton.imageTintList = ColorStateList.valueOf(color(R.color.meshcall_white))
+        audioRouteButton.contentDescription = context.getString(
+            R.string.meshcall_desc_audio_route_current,
+            context.getString(state.selected.labelRes),
+        )
+    }
+
+    /**
+     * Open the output picker. A single route means there is nothing to choose between, so
+     * the sheet is skipped rather than shown with one disabled row.
+     */
+    private fun showAudioRoutePicker() {
+        val call = call ?: return
+        val state = audioRouteState
+        if (state.available.size <= 1) return
+
+        MeshBottomSheet(context).apply {
+            addTitle(R.string.meshcall_audio_output_title)
+            state.available.forEach { route ->
+                addRow(
+                    iconRes = route.iconRes,
+                    labelRes = route.labelRes,
+                    selected = route == state.selected,
+                ) { call.selectAudioRoute(route) }
+            }
+        }.show()
+    }
+
+    /**
+     * The secondary-actions sheet behind "more". Entries appear only when they are actually
+     * usable — screen share needs a host that can run the MediaProjection consent flow — so
+     * the sheet never offers something that does nothing when tapped.
+     */
+    private fun showMoreSheet() {
+        val call = call
+        val share = onShareScreen
+        // Stopping needs no host involvement, so an active share is always offered an exit
+        // even when the host never supplied a way to start one.
+        if (share == null && !screenSharing) {
+            Toast.makeText(context, R.string.meshcall_more_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        MeshBottomSheet(context).apply {
+            addTitle(R.string.meshcall_more_title)
+            if (screenSharing) {
+                addRow(
+                    iconRes = R.drawable.meshcall_ic_present_to_all,
+                    labelRes = R.string.meshcall_stop_sharing,
+                    selected = true,
+                ) { call?.stopScreenShare() }
+            } else if (share != null) {
+                addRow(
+                    iconRes = R.drawable.meshcall_ic_present_to_all,
+                    labelRes = R.string.meshcall_desc_share,
+                    onClick = share,
+                )
+            }
+        }.show()
     }
 
     private fun applyMicButton(micOn: Boolean) {
@@ -291,15 +402,21 @@ class MeshMeetingView @JvmOverloads constructor(
             row.avatarLabel.text = initialOf(participant.userName)
             row.nameLabel.text = participant.userName
             applyRowMicButton(row.micButton, participant)
+            applyRowCameraIcon(row.cameraIcon, participant)
         }
     }
 
-    /** One row: initial avatar, name, and a mic icon that mutes that participant on tap. */
+    /**
+     * One row: initial avatar, name, a mic icon that mutes that participant on tap, and a
+     * camera icon that mirrors their on/off state (informational only — this SDK has no
+     * way to force someone's camera off).
+     */
     private class ParticipantRow(
         val root: LinearLayout,
         val avatarLabel: TextView,
         val nameLabel: TextView,
         val micButton: ImageButton,
+        val cameraIcon: ImageView,
     )
 
     private fun buildParticipantRow(addTopSpacing: Boolean): ParticipantRow {
@@ -343,10 +460,21 @@ class MeshMeetingView @JvmOverloads constructor(
             imageTintList = ColorStateList.valueOf(color(R.color.meshcall_white))
         }
 
+        val cameraIconSize = dp(30)
+        val cameraIcon = ImageView(context).apply {
+            layoutParams = LinearLayout.LayoutParams(cameraIconSize, cameraIconSize).apply {
+                marginStart = dp(4)
+            }
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            imageTintList = ColorStateList.valueOf(color(R.color.meshcall_white))
+        }
+
         root.addView(avatarLabel)
         root.addView(nameLabel)
         root.addView(micButton)
-        return ParticipantRow(root, avatarLabel, nameLabel, micButton)
+        root.addView(cameraIcon)
+        return ParticipantRow(root, avatarLabel, nameLabel, micButton, cameraIcon)
     }
 
     /**
@@ -371,6 +499,23 @@ class MeshMeetingView @JvmOverloads constructor(
         }
         button.setOnClickListener {
             if (participant.micEnabled) call?.requestMute(participant.id)
+        }
+    }
+
+    /**
+     * Camera icon mirrors that participant's on/off state. Purely informational — unlike
+     * the mic icon, there is no remote "force camera off" action to wire a tap to.
+     */
+    private fun applyRowCameraIcon(icon: ImageView, participant: MeshParticipant) {
+        val cameraOn = participant.cameraEnabled
+        icon.setImageResource(
+            if (cameraOn) R.drawable.meshcall_ic_videocam_on else R.drawable.ic_videocam_off,
+        )
+        icon.alpha = if (cameraOn) 1f else 0.5f
+        icon.contentDescription = if (cameraOn) {
+            context.getString(R.string.meshcall_desc_participant_camera_on, participant.userName)
+        } else {
+            context.getString(R.string.meshcall_desc_participant_camera_off, participant.userName)
         }
     }
 
@@ -418,6 +563,26 @@ class MeshMeetingView @JvmOverloads constructor(
     private companion object {
         const val TAG = "MeetingView"
         const val TIMER_TICK_MS = 500L
+
+        /**
+         * Icon per route. Wired headphones and Bluetooth deliberately differ: "which
+         * headset is this going to" is exactly the question the picker exists to answer.
+         */
+        val AudioRoute.iconRes: Int
+            get() = when (this) {
+                AudioRoute.EARPIECE -> R.drawable.meshcall_ic_route_earpiece
+                AudioRoute.SPEAKER -> R.drawable.meshcall_ic_route_speaker
+                AudioRoute.WIRED_HEADSET -> R.drawable.meshcall_ic_route_headset
+                AudioRoute.BLUETOOTH -> R.drawable.meshcall_ic_route_bluetooth
+            }
+
+        val AudioRoute.labelRes: Int
+            get() = when (this) {
+                AudioRoute.EARPIECE -> R.string.meshcall_route_earpiece
+                AudioRoute.SPEAKER -> R.string.meshcall_route_speaker
+                AudioRoute.WIRED_HEADSET -> R.string.meshcall_route_wired
+                AudioRoute.BLUETOOTH -> R.string.meshcall_route_bluetooth
+            }
 
         fun formatElapsed(elapsedMs: Long): String {
             val totalSeconds = elapsedMs / 1000

@@ -1,6 +1,8 @@
 package dev.meshcall.sdk.internal.webrtc
 
 import android.content.Context
+import android.content.Intent
+import android.media.projection.MediaProjection
 import dev.meshcall.sdk.internal.media.MediaConfig
 import dev.meshcall.sdk.internal.util.MeshLog
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -23,7 +25,9 @@ import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
 import org.webrtc.RtpReceiver
+import org.webrtc.RtpSender
 import org.webrtc.RtpTransceiver
+import org.webrtc.ScreenCapturerAndroid
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 import org.webrtc.SurfaceTextureHelper
@@ -72,6 +76,15 @@ internal class MeshWebRtcEngine(
     private var videoSource: VideoSource? = null
     private var videoCapturer: CameraVideoCapturer? = null
 
+    // Screen share path. Deliberately a *separate* source from the camera: a source is
+    // created with its screencast flag fixed for life, and that flag is what tells the
+    // encoder to protect resolution over frame rate. Sharing the camera source would keep
+    // text sharp only by accident.
+    private var screenSource: VideoSource? = null
+    private var screenTrack: VideoTrack? = null
+    private var screenCapturer: ScreenCapturerAndroid? = null
+    private var screenTextureHelper: SurfaceTextureHelper? = null
+
     /**
      * `CameraVideoCapturer.startCapture`/`stopCapture` block until the camera thread
      * acknowledges, which is an ANR on the main thread. All capture control is serialized
@@ -84,6 +97,9 @@ internal class MeshWebRtcEngine(
     // Toggle state, tracked eagerly so reads never need to touch WebRTC.
     @Volatile private var micEnabled: Boolean = config.initialMicOn
     @Volatile private var cameraEnabled: Boolean = config.initialCameraOn
+
+    /** Which physical camera is streaming right now — drives local preview mirroring. */
+    @Volatile private var frontCameraActive: Boolean = config.cameraFacing == MediaConfig.CameraFacing.FRONT
 
     private val peerRecords = ConcurrentHashMap<String, PeerConnectionHolder>()
 
@@ -100,8 +116,18 @@ internal class MeshWebRtcEngine(
     val localVideo: VideoTrack?
         get() = localVideoTrack
 
+    /**
+     * What the local tile and every peer should be showing: the screen while sharing, the
+     * camera otherwise. Screen share replaces the camera rather than adding a second
+     * stream, so there is only ever one outgoing video track.
+     */
+    val outgoingVideo: VideoTrack?
+        get() = screenTrack ?: localVideoTrack
+
     val isMicEnabled: Boolean get() = micEnabled
     val isCameraEnabled: Boolean get() = cameraEnabled
+    val isFrontCamera: Boolean get() = frontCameraActive
+    val isScreenSharing: Boolean get() = screenTrack != null
     val isDisposed: Boolean get() = _status.value == Status.DISPOSED
 
     /**
@@ -237,7 +263,9 @@ internal class MeshWebRtcEngine(
         holder.bind(pc)
 
         localAudioTrack?.let { pc.addTrack(it, listOf(LOCAL_STREAM_ID)) }
-        localVideoTrack?.let { pc.addTrack(it, listOf(LOCAL_STREAM_ID)) }
+        // outgoingVideo, not localVideoTrack: someone joining mid-share must receive the
+        // screen, otherwise they sit looking at a camera feed nobody else can see.
+        outgoingVideo?.let { pc.addTrack(it, listOf(LOCAL_STREAM_ID)) }
         capVideoSenderBitrate(pc)
 
         peerRecords[peerId] = holder
@@ -452,6 +480,152 @@ internal class MeshWebRtcEngine(
         lastStreamIdByPeer.remove(peerId)
     }
 
+    // ---- Screen share -------------------------------------------------------------
+
+    /**
+     * Start sharing the screen, replacing the camera on every existing peer connection.
+     *
+     * [permissionData] is the `Intent` returned by the MediaProjection consent dialog; the
+     * host has to obtain it, because consent can only be requested from an Activity. A
+     * foreground service of type `mediaProjection` must already be running — Android 14
+     * refuses to hand out a projection otherwise — which the manager guarantees.
+     *
+     * No renegotiation happens: `RtpSender.setTrack` swaps the track inside the existing
+     * video transceiver, and a same-kind swap needs no new offer/answer. That is the whole
+     * reason this replaces the camera instead of adding a second stream.
+     */
+    fun startScreenShare(permissionData: Intent): Boolean {
+        if (_status.value != Status.READY) {
+            onError("", "startScreenShare() in ${_status.value}")
+            return false
+        }
+        if (screenTrack != null) return true
+        val f = factory ?: return false
+
+        val projectionCallback = object : MediaProjection.Callback() {
+            override fun onStop() {
+                // Fired when the user revokes sharing from the system UI rather than from
+                // ours. Without this the capture dies but the app keeps claiming to share.
+                MeshLog.i(TAG) { "screen share stopped by the system" }
+                stopScreenShare()
+            }
+        }
+
+        val capturer = try {
+            ScreenCapturerAndroid(permissionData, projectionCallback)
+        } catch (e: Exception) {
+            onError("", "Screen capture could not start: ${e.message}")
+            return false
+        }
+
+        val eglContext = eglBase.eglBaseContext
+        // Its own helper: the camera's is owned by the camera capturer and feeding two
+        // capturers through one helper deadlocks the texture queue.
+        val helper = SurfaceTextureHelper.create("meshcall-screen", eglContext)
+        val source = f.createVideoSource(true)
+        val track = f.createVideoTrack(SCREEN_TRACK_ID, source)
+
+        try {
+            capturer.initialize(helper, appContext, source.capturerObserver)
+            val size = screenCaptureSize()
+            capturer.startCapture(size.first, size.second, config.frameRate)
+        } catch (e: Exception) {
+            onError("", "Screen capture failed to start: ${e.message}")
+            MeshLog.e(TAG, "screen startCapture failed", e)
+            track.dispose()
+            source.dispose()
+            helper.dispose()
+            return false
+        }
+
+        screenCapturer = capturer
+        screenTextureHelper = helper
+        screenSource = source
+        screenTrack = track
+
+        swapOutgoingVideo(track)
+        // The camera is released while sharing: holding it open drains battery and keeps
+        // the privacy indicator lit for a feed nobody is receiving.
+        stopCapture()
+
+        MeshLog.i(TAG) { "screen share started" }
+        _connectionEvents.tryEmit(ConnectionEvent.ScreenShareChanged(true))
+        return true
+    }
+
+    /** Stop sharing and put the camera back on every peer connection. Idempotent. */
+    fun stopScreenShare() {
+        val capturer = screenCapturer ?: return
+
+        swapOutgoingVideo(localVideoTrack)
+
+        screenCapturer = null
+        try {
+            capturer.stopCapture()
+        } catch (e: Exception) {
+            MeshLog.d(TAG) { "screen stopCapture: ${e.message}" }
+        }
+        capturer.dispose()
+
+        screenTrack?.dispose()
+        screenTrack = null
+        screenSource?.dispose()
+        screenSource = null
+        screenTextureHelper?.dispose()
+        screenTextureHelper = null
+
+        // Only resume the camera if it was meant to be on — a user who shared with the
+        // camera already off should not find it switched on when they stop.
+        if (cameraEnabled) startCapture()
+
+        MeshLog.i(TAG) { "screen share stopped" }
+        _connectionEvents.tryEmit(ConnectionEvent.ScreenShareChanged(false))
+    }
+
+    /**
+     * Point every peer's video sender at [track].
+     *
+     * Senders are matched by kind rather than by identity: the attached track changes each
+     * time sharing starts or stops, so comparing against a remembered instance would miss
+     * exactly the senders that need updating.
+     */
+    private fun swapOutgoingVideo(track: VideoTrack?) {
+        peerRecords.values.forEach { holder ->
+            val pc = holder.pc ?: return@forEach
+            pc.senders.forEach { sender: RtpSender ->
+                if (sender.track()?.kind() != VIDEO_KIND) return@forEach
+                // takeOwnership = false: this engine disposes its own tracks, and letting
+                // the sender own one would double-free it on the next swap.
+                if (!sender.setTrack(track, false)) {
+                    MeshLog.w(TAG, "setTrack failed on ${holder.peerId}")
+                }
+            }
+            capVideoSenderBitrate(pc)
+        }
+    }
+
+    /**
+     * Capture size for the screen, scaled down so the long edge fits [MAX_SCREEN_EDGE].
+     *
+     * A mesh uploads this once per peer, and a modern phone display is well past 1080p —
+     * capturing natively would blow the uplink apart for 3-4 participants. The aspect ratio
+     * is preserved so the shared screen is never stretched.
+     */
+    private fun screenCaptureSize(): Pair<Int, Int> {
+        val metrics = appContext.resources.displayMetrics
+        val width = metrics.widthPixels
+        val height = metrics.heightPixels
+        if (width <= 0 || height <= 0) return config.videoWidth to config.videoHeight
+
+        val longEdge = maxOf(width, height)
+        if (longEdge <= MAX_SCREEN_EDGE) return width to height
+
+        val scale = MAX_SCREEN_EDGE.toDouble() / longEdge
+        // Rounded to even numbers: H.264 chroma subsampling rejects odd dimensions.
+        fun even(value: Double) = (value.toInt() / 2) * 2
+        return even(width * scale).coerceAtLeast(2) to even(height * scale).coerceAtLeast(2)
+    }
+
     // ---- Local media toggles ----------------------------------------------------
 
     fun enableMic(enabled: Boolean) {
@@ -467,7 +641,12 @@ internal class MeshWebRtcEngine(
     fun enableCamera(enabled: Boolean) {
         cameraEnabled = enabled
         localVideoTrack?.setEnabled(enabled)
-        if (enabled) startCapture() else stopCapture()
+        // While sharing, the camera is off the wire entirely — running the capturer would
+        // burn battery and light the privacy indicator for frames no one receives. The flag
+        // is still recorded so stopping the share restores what the user actually wanted.
+        if (!isScreenSharing) {
+            if (enabled) startCapture() else stopCapture()
+        }
         _connectionEvents.tryEmit(ConnectionEvent.LocalMediaStateChanged(micEnabled, enabled))
     }
 
@@ -475,7 +654,18 @@ internal class MeshWebRtcEngine(
     fun switchCamera() {
         val capturer = videoCapturer ?: return
         try {
-            capturer.switchCamera(null)
+            capturer.switchCamera(
+                object : CameraVideoCapturer.CameraSwitchHandler {
+                    override fun onCameraSwitchDone(isFrontCamera: Boolean) {
+                        frontCameraActive = isFrontCamera
+                        _connectionEvents.tryEmit(ConnectionEvent.CameraFacingChanged(isFrontCamera))
+                    }
+
+                    override fun onCameraSwitchError(error: String) {
+                        onError("", "Failed to switch camera: $error")
+                    }
+                },
+            )
         } catch (e: Exception) {
             onError("", "Failed to switch camera: ${e.message}")
         }
@@ -545,6 +735,7 @@ internal class MeshWebRtcEngine(
             onError("", "No camera available on this device")
             return
         }
+        frontCameraActive = enumerator.isFrontFacing(deviceId)
         MeshLog.i(MeshLog.SCOPE_CAMERA) { "selected camera $deviceId (wantFront=$wantFront)" }
 
         // createCapturer throws rather than returning null on some OEM builds (Samsung
@@ -569,6 +760,14 @@ internal class MeshWebRtcEngine(
         }
 
         val source = f.createVideoSource(false)
+        // Different physical cameras expose different supported-format tables, so the
+        // capturer's own "closest match" to (videoWidth, videoHeight) can legitimately
+        // differ between front and back — e.g. the back sensor lands on a larger frame
+        // than the front one did. Without this, that larger frame is encoded through the
+        // same fixed bitrate cap (capVideoSenderBitrate), which reads as a quality drop
+        // after switching camera. Clamping the source output pins the encoded resolution
+        // to the configured target regardless of which camera actually captured it.
+        source.adaptOutputFormat(config.videoWidth, config.videoHeight, config.frameRate)
         videoSource = source
         localVideoTrack = f.createVideoTrack(VIDEO_TRACK_ID, source)
         try {
@@ -611,6 +810,11 @@ internal class MeshWebRtcEngine(
     fun dispose() {
         if (_status.value == Status.DISPOSED) return
         _status.value = Status.DISPOSED
+
+        // Before the peer records are cleared: stopScreenShare walks them to put the camera
+        // back, and it also releases the MediaProjection, which otherwise outlives the
+        // meeting and leaves the system's "recording screen" indicator on.
+        stopScreenShare()
 
         peerRecords.values.forEach { it.dispose() }
         peerRecords.clear()
@@ -659,6 +863,8 @@ internal class MeshWebRtcEngine(
     sealed class ConnectionEvent {
         data class IceStateChanged(val peerId: String, val state: String) : ConnectionEvent()
         data class LocalMediaStateChanged(val micOn: Boolean, val camOn: Boolean) : ConnectionEvent()
+        data class CameraFacingChanged(val isFrontCamera: Boolean) : ConnectionEvent()
+        data class ScreenShareChanged(val active: Boolean) : ConnectionEvent()
         data class LocalError(val peerId: String, val error: String) : ConnectionEvent() {
             override fun toString(): String = error
         }
@@ -672,6 +878,16 @@ internal class MeshWebRtcEngine(
         const val LOCAL_STREAM_ID = "meshcall_stream"
         const val AUDIO_TRACK_ID = "meshcall_audio"
         const val VIDEO_TRACK_ID = "meshcall_video"
+        const val SCREEN_TRACK_ID = "meshcall_screen"
+
+        /** `MediaStreamTrack.VIDEO_TRACK_KIND`, without depending on that constant's name. */
+        const val VIDEO_KIND = "video"
+
+        /**
+         * Longest edge the screen is captured at. A phone display is well past 1080p and a
+         * mesh uploads the stream once per peer, so native capture would swamp the uplink.
+         */
+        const val MAX_SCREEN_EDGE = 1280
 
         /** Bound the pre-remote-description candidate buffer. */
         const val MAX_PENDING_CANDIDATES = 128

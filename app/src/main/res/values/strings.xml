@@ -35,6 +35,4 @@
 
     <!-- Meeting screen (host-owned bits only; the rest lives in the SDK) -->
     <string name="permissions_required">Camera and microphone are required to join a meeting.</string>
-    <string name="share_coming_soon">Screen sharing is coming soon</string>
-    <string name="more_coming_soon">More options are coming soon</string>
 </resources>

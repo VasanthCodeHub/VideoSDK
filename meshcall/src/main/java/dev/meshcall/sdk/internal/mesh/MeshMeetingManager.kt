@@ -1,9 +1,13 @@
 package dev.meshcall.sdk.internal.mesh
 
 import android.content.Context
+import android.content.Intent
 import android.os.SystemClock
+import dev.meshcall.sdk.api.AudioRoute
 import dev.meshcall.sdk.api.LocalMediaState
+import dev.meshcall.sdk.internal.media.AudioRouteController
 import dev.meshcall.sdk.internal.media.MediaConfig
+import dev.meshcall.sdk.internal.media.MeshScreenShareService
 import dev.meshcall.sdk.internal.signaling.SignalEvent
 import dev.meshcall.sdk.internal.signaling.SignalingClient
 import dev.meshcall.sdk.internal.signaling.SignalingSchema
@@ -101,6 +105,22 @@ internal class MeshMeetingManager(
     private val _localMedia = MutableStateFlow(LocalMediaState())
     val localMedia = _localMedia.asStateFlow()
 
+    /** True while the front camera is the one streaming — drives local preview mirroring. */
+    private val _frontCameraActive = MutableStateFlow(true)
+    val frontCameraActive = _frontCameraActive.asStateFlow()
+
+    /** True while this device is sharing its screen in place of its camera. */
+    private val _screenSharing = MutableStateFlow(false)
+    val screenSharing = _screenSharing.asStateFlow()
+
+    /**
+     * Output routing. Built once per manager rather than per session so a route the user
+     * picked survives a rejoin, and so leave() has something to restore the audio mode with
+     * even when the session never came up.
+     */
+    private val audioRouter = AudioRouteController(appContext)
+    val audioRoute = audioRouter.state
+
     private var signalingJob: Job? = null
     private var localVideoTrack: VideoTrack? = null
 
@@ -114,11 +134,17 @@ internal class MeshMeetingManager(
 
         MeshLog.i(TAG) { "joining meeting $meetingId as $userId" }
 
+        // Before prepareLocalMedia: the audio mode has to be MODE_IN_COMMUNICATION when
+        // WebRTC opens its capture session, or the platform hands it a media-mode recorder
+        // and the hardware echo canceller never engages.
+        audioRouter.start()
+
         val eng = MeshWebRtcEngine(appContext, config)
         engine = eng
         eng.prepareLocalMedia()
         localVideoTrack = eng.localVideo
         _localMedia.value = LocalMediaState(eng.isMicEnabled, eng.isCameraEnabled)
+        _frontCameraActive.value = eng.isFrontCamera
 
         val client = SocketIOSignalingClient(brokerUrl, userId, userName)
         signaling = client
@@ -152,6 +178,17 @@ internal class MeshMeetingManager(
                             )
 
                         is MeshWebRtcEngine.ConnectionEvent.IceStateChanged -> Unit
+
+                        is MeshWebRtcEngine.ConnectionEvent.CameraFacingChanged ->
+                            _frontCameraActive.value = event.isFrontCamera
+
+                        is MeshWebRtcEngine.ConnectionEvent.ScreenShareChanged -> {
+                            _screenSharing.value = event.active
+                            // The system UI can end a share on its own, so the service is
+                            // stopped from the event rather than only from stopScreenShare().
+                            if (!event.active) MeshScreenShareService.stop(appContext)
+                            publishLocalVideo()
+                        }
                     }
                 }
             }
@@ -473,6 +510,40 @@ internal class MeshMeetingManager(
     fun switchCamera() = engine?.switchCamera() ?: Unit
     fun setMic(enabled: Boolean) = engine?.enableMic(enabled) ?: Unit
     fun setCamera(enabled: Boolean) = engine?.enableCamera(enabled) ?: Unit
+    fun selectAudioRoute(route: AudioRoute) = audioRouter.select(route)
+
+    /**
+     * Begin sharing the screen. [permissionData] is the MediaProjection consent result the
+     * host obtained from an Activity.
+     *
+     * The foreground service has to be up *before* the projection is requested — Android 14
+     * rejects it otherwise — so capture starts inside the service's ready callback rather
+     * than inline here.
+     */
+    fun startScreenShare(permissionData: Intent) {
+        val eng = engine ?: return
+        if (eng.isScreenSharing) return
+        try {
+            MeshScreenShareService.start(appContext) {
+                if (!eng.startScreenShare(permissionData)) {
+                    MeshScreenShareService.stop(appContext)
+                }
+            }
+        } catch (e: Exception) {
+            _errors.tryEmit("Screen sharing could not start: ${e.message}")
+        }
+    }
+
+    fun stopScreenShare() {
+        engine?.stopScreenShare()
+        MeshScreenShareService.stop(appContext)
+    }
+
+    /** Republish whichever track the local tile should render — camera or screen. */
+    private fun publishLocalVideo() {
+        localVideoTrack = engine?.outgoingVideo
+        _mediaEvents.tryEmit(MediaEvent.LocalVideoChanged(localVideoTrack))
+    }
 
     /**
      * Ask [peerId] to mute their mic. Honored automatically on their end — see
@@ -520,9 +591,19 @@ internal class MeshMeetingManager(
         relinkAttempts.clear()
         _signalingConnected.value = false
 
+        // Explicit, not left to engine.dispose(): by then the event collector is cancelled,
+        // so the service would never be told to stop and the screen-capture notification
+        // would outlive the meeting.
+        MeshScreenShareService.stop(appContext)
+        _screenSharing.value = false
+
         engine?.dispose()
         engine = null
         localVideoTrack = null
+
+        // After the engine: stopping the router restores the system audio mode, and doing
+        // that while WebRTC still holds the capture session leaves the device in call mode.
+        audioRouter.stop()
 
         _peers.value = emptyList()
         _session.value = Session.Idle
@@ -554,6 +635,9 @@ internal class MeshMeetingManager(
         data class RemoteStreamAdded(val peerId: String) : MediaEvent()
         data class RemoteStreamRemoved(val peerId: String) : MediaEvent()
         data class RemoteStreamChanged(val peerId: String, val stream: MediaStream?) : MediaEvent()
+
+        /** The local tile's track was swapped — camera ⇄ screen share. */
+        data class LocalVideoChanged(val track: VideoTrack?) : MediaEvent()
     }
 
     internal companion object {

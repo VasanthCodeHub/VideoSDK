@@ -16,6 +16,8 @@
     <string name="meshcall_participants_title">Participants (%1$d)</string>
     <string name="meshcall_desc_mute_participant">Mute %1$s</string>
     <string name="meshcall_desc_participant_muted">%1$s is muted</string>
+    <string name="meshcall_desc_participant_camera_on">%1$s\'s camera is on</string>
+    <string name="meshcall_desc_participant_camera_off">%1$s\'s camera is off</string>
     <string name="meshcall_meeting_code_copied">Meeting code copied</string>
     <string name="meshcall_meeting_code_clip_label">meeting_code</string>
 
@@ -28,6 +30,27 @@
     <string name="meshcall_desc_share">Share screen</string>
     <string name="meshcall_desc_more">More options</string>
     <string name="meshcall_desc_leave">Leave meeting</string>
+
+    <!-- Screen share -->
+    <string name="meshcall_screen_share_channel">Screen sharing</string>
+    <string name="meshcall_screen_share_title">Sharing your screen</string>
+    <string name="meshcall_screen_share_text">Your screen is visible to everyone in the meeting</string>
+    <string name="meshcall_stop_sharing">Stop sharing</string>
+    <string name="meshcall_you_are_sharing">You are sharing your screen</string>
+    <string name="meshcall_share_failed">Screen sharing could not start</string>
+
+    <!-- More options sheet -->
+    <string name="meshcall_more_title">More</string>
+    <string name="meshcall_more_empty">No additional options</string>
+
+    <!-- Audio output picker -->
+    <string name="meshcall_desc_audio_route">Audio output</string>
+    <string name="meshcall_desc_audio_route_current">Audio output: %1$s</string>
+    <string name="meshcall_audio_output_title">Audio output</string>
+    <string name="meshcall_route_earpiece">Phone</string>
+    <string name="meshcall_route_speaker">Speaker</string>
+    <string name="meshcall_route_wired">Headphones</string>
+    <string name="meshcall_route_bluetooth">Bluetooth</string>
 
     <!-- Leave confirmation -->
     <string name="meshcall_leave_title">Leave meeting?</string>

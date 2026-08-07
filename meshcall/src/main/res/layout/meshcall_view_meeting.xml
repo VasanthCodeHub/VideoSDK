@@ -222,16 +222,21 @@
             android:scaleType="fitCenter"
             android:src="@drawable/meshcall_ic_videocam_on" />
 
+        <!--
+          Speaker, Bluetooth, wired and earpiece are one decision — which device the call
+          is on — so they are one button that opens a picker, not four toggles that can
+          contradict each other. Screen share moved into the "more" sheet.
+        -->
         <ImageButton
-            android:id="@+id/meshcall_btn_share"
+            android:id="@+id/meshcall_btn_audio_route"
             android:layout_width="56dp"
             android:layout_height="56dp"
             android:layout_marginStart="10dp"
             android:background="@drawable/meshcall_bg_control"
-            android:contentDescription="@string/meshcall_desc_share"
+            android:contentDescription="@string/meshcall_desc_audio_route"
             android:padding="16dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/meshcall_ic_present_to_all" />
+            android:src="@drawable/meshcall_ic_route_speaker" />
 
         <ImageButton
             android:id="@+id/meshcall_btn_more"

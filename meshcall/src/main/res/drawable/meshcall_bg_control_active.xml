@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Control button in its "on" state — currently the audio route button whenever output is
+  anywhere but the earpiece. Brighter than meshcall_bg_control but not the danger red, so
+  it reads as active rather than as a warning.
+-->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33FFFFFF">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#40FFFFFF" />
+        </shape>
+    </item>
+</ripple>

@@ -21,6 +21,8 @@
         android:layout_marginTop="10dp"
         android:fontFamily="monospace"
         android:letterSpacing="0.2"
+        android:maxLines="1"
+        android:ellipsize="end"
         android:textColor="@color/on_surface"
         android:textIsSelectable="true"
         android:textSize="34sp"
@@ -53,10 +55,11 @@
                 android:id="@+id/btn_copy"
                 android:layout_width="52dp"
                 android:layout_height="52dp"
+                android:padding="14dp"
                 android:background="@drawable/bg_icon_circle"
                 android:backgroundTint="@color/surface_container_high"
                 android:contentDescription="@string/copy"
-                android:scaleType="centerInside"
+                android:scaleType="fitCenter"
                 android:src="@drawable/ic_copy"
                 app:tint="@color/on_surface"/>
 
@@ -80,10 +83,11 @@
                 android:id="@+id/btn_share"
                 android:layout_width="52dp"
                 android:layout_height="52dp"
+                android:padding="14dp"
                 android:background="@drawable/bg_icon_circle"
                 android:backgroundTint="@color/surface_container_high"
                 android:contentDescription="@string/share"
-                android:scaleType="centerInside"
+                android:scaleType="fitCenter"
                 android:src="@drawable/ic_share"
                 app:tint="@color/on_surface"/>
 
@@ -107,12 +111,13 @@
                 android:id="@+id/btn_start"
                 android:layout_width="52dp"
                 android:layout_height="52dp"
+                android:padding="14dp"
                 android:background="@drawable/bg_icon_circle"
-                android:backgroundTint="@color/primary"
+                android:backgroundTint="@color/surface_container_high"
                 android:contentDescription="@string/start_meeting"
-                android:scaleType="centerInside"
+                android:scaleType="fitCenter"
                 android:src="@drawable/ic_play"
-                app:tint="@color/on_primary"/>
+                app:tint="@color/on_surface"/>
 
             <TextView
                 android:layout_width="wrap_content"
