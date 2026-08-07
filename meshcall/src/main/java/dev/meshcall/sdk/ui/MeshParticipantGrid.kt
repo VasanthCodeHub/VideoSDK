@@ -9,7 +9,6 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -293,13 +292,11 @@ class MeshParticipantGrid(
             setBackgroundResource(R.drawable.bg_tile_frame)
         }
 
+        // No background, elevation, or clipToOutline on the renderer: the surface sits in
+        // the underlay plane, so anything painted on the view itself composites *above* the
+        // video and hides it. Rounded corners come from the TileFrameDrawable overlay below.
+        // See README §7 rule 6.
         frame.addView(renderer, matchParent())
-        // ViewOutlineProvider.BACKGROUND only produces an outline when the view itself has
-        // a non-null background — without this, clipToOutline is silently a no-op and the
-        // video's square corners overhang the tile's rounded frame.
-        renderer.background = ContextCompat.getDrawable(context, R.drawable.bg_tile_clip)
-        renderer.outlineProvider = ViewOutlineProvider.BACKGROUND
-        renderer.clipToOutline = true
 
         val placeholder = buildPlaceholder(name, peerId).apply { visibility = View.GONE }
         frame.addView(placeholder, matchParent())
@@ -399,11 +396,17 @@ class MeshParticipantGrid(
         )
         frame.addView(chrome, matchParent())
 
-        // Topmost: the visible frame border, drawn above the video so it is never
-        // obscured regardless of whether the SurfaceView clip above was honored.
+        // Topmost: the frame border *and* the corner mask that gives the tile its rounded
+        // look. Both have to be painted here, above the video — the renderer's surface is
+        // an unclippable underlay, so its square corners can only be covered, not cut.
         frame.addView(
             View(context).apply {
-                setBackgroundResource(R.drawable.bg_tile_border)
+                background = TileFrameDrawable(
+                    fillColor = color(R.color.meshcall_tile_frame_bg),
+                    strokeColor = color(R.color.meshcall_tile_frame_stroke),
+                    strokeWidth = dpF(1.5f),
+                    cornerRadius = dpF(18f),
+                )
                 isClickable = false
             },
             matchParent(),
@@ -767,11 +770,14 @@ class MeshParticipantGrid(
 
     private fun color(res: Int) = ContextCompat.getColor(context, res)
 
-    private fun dp(value: Int): Int = TypedValue.applyDimension(
+    private fun dp(value: Int): Int = dpF(value.toFloat()).toInt()
+
+    /** Unrounded px, for the frame's sub-pixel stroke width and corner radius. */
+    private fun dpF(value: Float): Float = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP,
-        value.toFloat(),
+        value,
         context.resources.displayMetrics,
-    ).toInt()
+    )
 
     private val layoutListener =
         View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyGrid() }

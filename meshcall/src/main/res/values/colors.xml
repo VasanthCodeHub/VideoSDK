@@ -5,6 +5,10 @@
     <color name="meshcall_white">#FFFFFFFF</color>
     <color name="meshcall_tile_background">#FF1B1B1B</color>
     <color name="meshcall_tile_placeholder_bg">#FF18181B</color>
+    <!-- Shared by bg_tile_frame and the TileFrameDrawable corner mask painted over the
+         video: the two must match exactly or the rounded corners show a seam. -->
+    <color name="meshcall_tile_frame_bg">#FF18181B</color>
+    <color name="meshcall_tile_frame_stroke">#3DFFFFFF</color>
     <color name="meshcall_mute_badge">#B3000000</color>
     <color name="meshcall_badge_red">#FFEF4444</color>
     <color name="meshcall_status_red">#FFFF5252</color>

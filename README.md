@@ -343,8 +343,10 @@ Mandatory, not suggestions.
 5. **Keep the deterministic offer rule** (lower `userId` offers). No both-sides-offer races
    without a glare-handling plan.
 6. **SurfaceView hygiene.** Never put `elevation`, an opaque background, or `clipToOutline`
-   directly on a `SurfaceViewRenderer` in XML — the background composites *above* the video
-   and hides it. Tile chrome belongs in a sibling view on the window plane.
+   directly on a `SurfaceViewRenderer`, in XML or in code — the background composites *above*
+   the video and hides it. Tile chrome belongs in a sibling view on the window plane. Rounded
+   video corners are *masked*, not clipped: `TileFrameDrawable` paints the corner slivers over
+   the video from the topmost child. An underlay surface cannot be shaped any other way.
 7. **The SDK stays theme-independent.** `MeshMeetingView` uses platform views only, so it
    inflates in any host app. Don't introduce a Material dependency into `:meshcall`.
 8. **No secrets in the repo.** Broker URLs stay constants/extras; keystores are gitignored.
