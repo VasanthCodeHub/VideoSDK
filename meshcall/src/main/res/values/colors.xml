@@ -21,4 +21,7 @@
     <color name="meshcall_control_background">#1AFFFFFF</color>
     <color name="meshcall_danger">#FFDC2626</color>
     <color name="meshcall_avatar_background">#33FFFFFF</color>
+    <!-- Text on a filled-light control (the "Admit" button). -->
+    <color name="meshcall_on_light">#FF12131A</color>
+    <color name="meshcall_scrim">#F2000000</color>
 </resources>

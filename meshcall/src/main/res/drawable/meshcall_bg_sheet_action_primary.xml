@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Affirmative action (admit someone). Filled light on dark chrome, which reads as the
+  primary choice without introducing a colour the rest of the SDK does not use.
+-->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33000000">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/meshcall_white" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+</ripple>

@@ -9,6 +9,8 @@ data class MeetingStatus(
     val meetingId: String,
     /** People currently in the meeting. Zero means the code is not live. */
     val participantCount: Int,
+    /** Private meetings are joinable, but only after the host admits you. */
+    val isPrivate: Boolean = false,
 ) {
     val isLive: Boolean get() = participantCount > 0
 }
@@ -49,8 +51,7 @@ object MeshMeetingDirectory {
         meetingIds: List<String>,
         timeoutMs: Long = DEFAULT_TIMEOUT_MS,
     ): List<MeetingStatus>? = withContext(Dispatchers.IO) {
-        MeetingLookupClient.check(brokerUrl, meetingIds, timeoutMs)
-            ?.map { (meetingId, count) -> MeetingStatus(meetingId, count) }
+        MeetingLookupClient.check(brokerUrl, meetingIds, timeoutMs)?.values?.toList()
     }
 
     /** Convenience for one code. Null when the broker could not be reached. */

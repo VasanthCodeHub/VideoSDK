@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center_horizontal"
@@ -55,6 +56,22 @@
         android:text="@string/share_meeting_hint"
         android:textColor="@color/on_surface_variant"
         android:textSize="13sp"/>
+
+    <!-- Only for a private meeting: the code alone is not enough to get in. -->
+    <TextView
+        android:id="@+id/private_notice"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_chip"
+        android:gravity="center"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="8dp"
+        android:text="@string/private_meeting_code_notice"
+        android:textColor="@color/on_surface"
+        android:textSize="12sp"
+        android:visibility="gone"
+        tools:visibility="visible"/>
 
     <LinearLayout
         android:layout_width="match_parent"

@@ -14,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.videocall.data.MeetingHistoryRepository
 import com.example.videocall.data.UserPreferences
 import com.example.videocall.databinding.ActivityMainBinding
+import dev.meshcall.sdk.api.Admission
 import dev.meshcall.sdk.api.IceServerConfig
 import dev.meshcall.sdk.api.LocalIdentityProvider
 import dev.meshcall.sdk.api.MeshCall
@@ -116,6 +117,7 @@ class MainActivity : AppCompatActivity() {
             displayName = name,
             config = MeshCallConfig(iceServers = ICE_SERVERS),
             createIfMissing = intent.getBooleanExtra(EXTRA_CREATE, false),
+            isPrivate = intent.getBooleanExtra(EXTRA_PRIVATE, false),
         )
         binding.meetingView.attach(mesh, meetingId, showConnectionBanner = true)
 
@@ -130,6 +132,17 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this@MainActivity, R.string.meeting_not_found, Toast.LENGTH_LONG)
                     .show()
                 finish()
+            }
+        }
+        // Private meeting, host said no. The SDK shows the waiting room; only the host app
+        // can navigate away from it.
+        lifecycleScope.launch {
+            mesh.admission.collect { admission ->
+                if (admission == Admission.DENIED) {
+                    Toast.makeText(this@MainActivity, R.string.join_declined, Toast.LENGTH_LONG)
+                        .show()
+                    finish()
+                }
             }
         }
     }
@@ -169,6 +182,7 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_TITLE = "title"
         const val EXTRA_NAME = "name"
         const val EXTRA_CREATE = "create"
+        const val EXTRA_PRIVATE = "private"
         const val DEFAULT_BROKER = "wss://district-body-stumbling.ngrok-free.dev"
         const val DEFAULT_MEETING = "ABC123"
 

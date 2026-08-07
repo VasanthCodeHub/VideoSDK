@@ -33,6 +33,14 @@
     <string name="meshcall_desc_more">More options</string>
     <string name="meshcall_desc_leave">Leave meeting</string>
 
+    <!-- Private meetings -->
+    <string name="meshcall_wants_to_join">wants to join this meeting</string>
+    <string name="meshcall_admit">Admit</string>
+    <string name="meshcall_decline">Decline</string>
+    <string name="meshcall_more_waiting">%1$d more waiting</string>
+    <string name="meshcall_waiting_title">Waiting to be let in</string>
+    <string name="meshcall_waiting_message">This is a private meeting. The host has been asked to admit you.</string>
+
     <!-- Screen share -->
     <string name="meshcall_screen_share_channel">Screen sharing</string>
     <string name="meshcall_screen_share_title">Sharing your screen</string>

@@ -18,6 +18,8 @@
     <string name="create_meeting">Create Meeting</string>
     <string name="create_meeting_hint">Give your meeting a title before you start it.</string>
     <string name="meeting_title_hint">Meeting title</string>
+    <string name="private_meeting">Private meeting</string>
+    <string name="private_meeting_note">Anyone with the code has to ask to join, and you decide who gets in. You can\'t change this after the meeting starts.</string>
     <string name="join_meeting">Join Meeting</string>
     <string name="join_meeting_hint">Enter a meeting code to join an existing meeting.</string>
     <string name="or_join_with_code">or join with a code</string>
@@ -26,11 +28,13 @@
     <string name="checking_meeting">Checking…</string>
     <string name="meeting_not_found">No meeting is running with that code. It may have ended.</string>
     <string name="broker_unreachable">Can\'t reach the meeting server. Check your connection and try again.</string>
+    <string name="private_join_notice">Private meeting — the host will be asked to let you in.</string>
 
     <!-- Meeting code dialog -->
     <string name="your_meeting_code">Your meeting code</string>
     <string name="share_meeting_hint">Share this code, then start the meeting — others can join once you\'re in.</string>
     <string name="close">Close</string>
+    <string name="private_meeting_code_notice">Private — you\'ll be asked to admit each person who uses this code.</string>
     <string name="start_meeting">Start</string>
     <string name="copy">Copy</string>
     <string name="share">Share</string>
@@ -52,4 +56,5 @@
 
     <!-- Meeting screen (host-owned bits only; the rest lives in the SDK) -->
     <string name="permissions_required">Camera and microphone are required to join a meeting.</string>
+    <string name="join_declined">The host declined your request to join.</string>
 </resources>

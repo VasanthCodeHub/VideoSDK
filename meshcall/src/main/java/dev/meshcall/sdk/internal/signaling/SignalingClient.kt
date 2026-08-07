@@ -22,8 +22,15 @@ internal interface SignalingClient {
      *   the participant who started the meeting may do this; everyone else must be
      *   refused with [SignalEvent.MeetingNotFound] rather than silently landing in an
      *   empty meeting of their own making.
+     * @param isPrivate open the meeting as private — every later joiner has to be admitted
+     *   by the host. Only honored together with [createIfMissing]; the broker ignores it
+     *   on any join that does not create the meeting.
      */
-    suspend fun connect(meetingId: String, createIfMissing: Boolean = false)
+    suspend fun connect(
+        meetingId: String,
+        createIfMissing: Boolean = false,
+        isPrivate: Boolean = false,
+    )
 
     /**
      * Push a message. [targetPeerId] is null for meeting-wide broadcasts. [payload] is a
@@ -83,6 +90,18 @@ internal sealed class SignalEvent {
      * session — nothing else will arrive, so the host should leave and say so.
      */
     data class MeetingNotFound(val meetingId: String) : SignalEvent()
+
+    /** Private meeting: we are in the waiting room until the host decides. */
+    data class AwaitingApproval(val meetingId: String) : SignalEvent()
+
+    /** Private meeting: the host declined. Terminal, like [MeetingNotFound]. */
+    data class JoinDenied(val meetingId: String) : SignalEvent()
+
+    /** Someone is asking to be let into our private meeting. Delivered to the host only. */
+    data class Knock(val peerId: String, val userName: String) : SignalEvent()
+
+    /** A knocker gave up (or dropped) before the host decided. */
+    data class KnockWithdrawn(val peerId: String) : SignalEvent()
 
     /** The transport is healthy but the broker reported a fault. */
     data class ErrorReceived(val message: String) : SignalEvent()

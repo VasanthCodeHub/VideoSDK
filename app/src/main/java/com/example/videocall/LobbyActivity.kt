@@ -108,7 +108,11 @@ class LobbyActivity : AppCompatActivity() {
         dialogBinding.btnCreate.setOnClickListener {
             val title = dialogBinding.etMeetingTitle.text.toString().trim()
             dialog.dismiss()
-            showMeetingCodeDialog(generateMeetingCode(), title)
+            showMeetingCodeDialog(
+                meetingCode = generateMeetingCode(),
+                title = title,
+                isPrivate = dialogBinding.switchPrivate.isChecked,
+            )
         }
         dialog.show()
     }
@@ -143,27 +147,40 @@ class LobbyActivity : AppCompatActivity() {
         joinButton.isEnabled = false
         joinButton.setText(R.string.checking_meeting)
         lifecycleScope.launch {
-            val live = MeshMeetingDirectory.isLive(DEFAULT_BROKER, code)
+            val statuses = MeshMeetingDirectory.status(DEFAULT_BROKER, listOf(code))
+            val status = statuses?.firstOrNull { it.meetingId == code }
             joinButton.isEnabled = true
             joinButton.setText(R.string.join_meeting)
-            when (live) {
-                true -> {
+            when {
+                statuses == null ->
+                    Toast.makeText(this@LobbyActivity, R.string.broker_unreachable, Toast.LENGTH_LONG)
+                        .show()
+
+                status?.isLive != true ->
+                    Toast.makeText(this@LobbyActivity, R.string.meeting_not_found, Toast.LENGTH_LONG)
+                        .show()
+
+                else -> {
+                    // Say up front that the door is guarded — the meeting screen would
+                    // otherwise just sit on a waiting overlay with no explanation of why.
+                    if (status.isPrivate) {
+                        Toast.makeText(
+                            this@LobbyActivity,
+                            R.string.private_join_notice,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
                     dialog.dismiss()
                     startMeeting(meetingCode = code)
                 }
-                false ->
-                    Toast.makeText(this@LobbyActivity, R.string.meeting_not_found, Toast.LENGTH_LONG)
-                        .show()
-                null ->
-                    Toast.makeText(this@LobbyActivity, R.string.broker_unreachable, Toast.LENGTH_LONG)
-                        .show()
             }
         }
     }
 
-    private fun showMeetingCodeDialog(meetingCode: String, title: String) {
+    private fun showMeetingCodeDialog(meetingCode: String, title: String, isPrivate: Boolean) {
         val dialogBinding = DialogMeetingCodeBinding.inflate(layoutInflater)
         dialogBinding.meetingCode.text = meetingCode
+        dialogBinding.privateNotice.visibility = if (isPrivate) View.VISIBLE else View.GONE
 
         val dialog = AlertDialog.Builder(this).setView(dialogBinding.root).create()
         // Copying and sharing are things you often do both of, and neither ends this
@@ -181,7 +198,12 @@ class LobbyActivity : AppCompatActivity() {
             dialog.dismiss()
             // The only path allowed to open a meeting: this code was generated here and
             // exists nowhere until somebody starts it.
-            startMeeting(meetingCode = meetingCode, title = title, create = true)
+            startMeeting(
+                meetingCode = meetingCode,
+                title = title,
+                create = true,
+                isPrivate = isPrivate,
+            )
         }
         dialog.show()
     }
@@ -208,6 +230,7 @@ class LobbyActivity : AppCompatActivity() {
         meetingCode: String,
         title: String = "",
         create: Boolean = false,
+        isPrivate: Boolean = false,
     ) {
         startActivity(
             Intent(this, MainActivity::class.java)
@@ -215,7 +238,8 @@ class LobbyActivity : AppCompatActivity() {
                 .putExtra(EXTRA_MEETING, meetingCode)
                 .putExtra(EXTRA_TITLE, title)
                 .putExtra(EXTRA_NAME, userPreferences.displayName)
-                .putExtra(EXTRA_CREATE, create),
+                .putExtra(EXTRA_CREATE, create)
+                .putExtra(EXTRA_PRIVATE, isPrivate),
         )
     }
 
@@ -235,6 +259,7 @@ class LobbyActivity : AppCompatActivity() {
         const val EXTRA_TITLE = "title"
         const val EXTRA_NAME = "name"
         const val EXTRA_CREATE = "create"
+        const val EXTRA_PRIVATE = "private"
 
         const val DEFAULT_BROKER = "wss://district-body-stumbling.ngrok-free.dev"
         const val MEETING_CODE_LENGTH = 6

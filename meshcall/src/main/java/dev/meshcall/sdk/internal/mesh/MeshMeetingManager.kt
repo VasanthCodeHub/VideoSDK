@@ -3,7 +3,9 @@ package dev.meshcall.sdk.internal.mesh
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import dev.meshcall.sdk.api.Admission
 import dev.meshcall.sdk.api.AudioRoute
+import dev.meshcall.sdk.api.JoinRequest
 import dev.meshcall.sdk.api.LocalMediaState
 import dev.meshcall.sdk.internal.media.AudioRouteController
 import dev.meshcall.sdk.internal.media.MediaConfig
@@ -131,13 +133,30 @@ internal class MeshMeetingManager(
     private val _meetingNotFound = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 4)
     val meetingNotFound = _meetingNotFound.asSharedFlow()
 
+    /** Where we stand with the meeting's door. Only ever leaves [Admission.JOINING] once. */
+    private val _admission = MutableStateFlow(Admission.JOINING)
+    val admission = _admission.asStateFlow()
+
+    /**
+     * People waiting to be let into our private meeting, oldest first — only ever
+     * non-empty for the host, since the broker sends knocks nowhere else.
+     */
+    private val _joinRequests = MutableStateFlow<List<JoinRequest>>(emptyList())
+    val joinRequests = _joinRequests.asStateFlow()
+
     /**
      * Join [meetingId]. Idempotent: re-joining the meeting already in progress is a no-op.
      *
      * [createIfMissing] is for the participant who started the meeting. Everyone else
      * joins without it and is refused when the code is not live — see [meetingNotFound].
+     * [isPrivate] applies only while creating: it makes every later joiner knock.
      */
-    fun join(meetingId: String, config: MediaConfig, createIfMissing: Boolean = false) {
+    fun join(
+        meetingId: String,
+        config: MediaConfig,
+        createIfMissing: Boolean = false,
+        isPrivate: Boolean = false,
+    ) {
         val current = _session.value
         if (current is Session.Active && current.meetingId == meetingId) return
         leave()
@@ -161,6 +180,8 @@ internal class MeshMeetingManager(
         _signalingConnected.value = false
 
         _peers.value = emptyList()
+        _joinRequests.value = emptyList()
+        _admission.value = Admission.JOINING
         _session.value = Session.Active(meetingId)
 
         scope.launch {
@@ -215,7 +236,7 @@ internal class MeshMeetingManager(
             signalingJob?.cancel()
             signalingJob = launch { client.events.collect(::onSignalEvent) }
 
-            client.connect(meetingId, createIfMissing)
+            client.connect(meetingId, createIfMissing, isPrivate)
         }
 
         startSpeakerSampler()
@@ -239,6 +260,9 @@ internal class MeshMeetingManager(
 
             is SignalEvent.MeetingSnapshot -> {
                 _signalingConnected.value = true
+                // A roster only ever reaches a socket the broker accepted, so this is
+                // also the moment a knock turns into admission.
+                _admission.value = Admission.ADMITTED
                 val ids = event.peers.map { it.id }.filter { it != userId }
                 // Reconcile: adopt the roster order, link to anyone new, drop the gone.
                 val known = remoteNames.toMap()
@@ -322,6 +346,29 @@ internal class MeshMeetingManager(
                 // socket.io reconnects on its own; the reconnect path re-emits
                 // join-meeting, which brings back a fresh roster snapshot.
             }
+
+            is SignalEvent.AwaitingApproval -> {
+                MeshLog.i(TAG) { "waiting for the host to admit us" }
+                _admission.value = Admission.AWAITING_APPROVAL
+            }
+
+            is SignalEvent.JoinDenied -> {
+                MeshLog.w(TAG, "the host declined our request to join")
+                _signalingConnected.value = false
+                _admission.value = Admission.DENIED
+            }
+
+            is SignalEvent.Knock -> {
+                // Re-sent by the broker whenever a host arrives or inherits the role, so
+                // the same person must not stack up twice in the list.
+                if (_joinRequests.value.none { it.userId == event.peerId }) {
+                    _joinRequests.value = _joinRequests.value +
+                        JoinRequest(event.peerId, event.userName.ifEmpty { event.peerId })
+                }
+            }
+
+            is SignalEvent.KnockWithdrawn ->
+                _joinRequests.value = _joinRequests.value.filterNot { it.userId == event.peerId }
 
             is SignalEvent.MeetingNotFound -> {
                 MeshLog.w(TAG, "meeting ${event.meetingId} does not exist — leaving")
@@ -569,6 +616,24 @@ internal class MeshMeetingManager(
     fun requestMute(peerId: String) {
         val client = signaling ?: return
         scope.launch { client.sendMessage(SignalingSchema.TYPE_MUTE_REQUEST, peerId, "{}") }
+    }
+
+    /**
+     * Answer one waiting request. Ignored by the broker unless we really are the host, so
+     * this is a UI convenience, not the access control itself.
+     *
+     * The request is dropped locally either way: the broker does not echo the decision
+     * back, and a card that lingers after being answered invites a second tap.
+     */
+    fun answerJoinRequest(peerId: String, admit: Boolean) {
+        val client = signaling ?: return
+        _joinRequests.value = _joinRequests.value.filterNot { it.userId == peerId }
+        val payload = JSONObject()
+            .put(SignalingSchema.KEY_USER_ID, peerId)
+            .put(SignalingSchema.KEY_ADMIT, admit)
+        scope.launch {
+            client.sendMessage(SignalingSchema.TYPE_ADMIT_DECISION, null, payload.toString())
+        }
     }
 
     fun localVideo(): VideoTrack? = localVideoTrack

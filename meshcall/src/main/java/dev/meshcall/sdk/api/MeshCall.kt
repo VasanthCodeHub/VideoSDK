@@ -67,6 +67,10 @@ class MeshCall(context: Context) {
      * @param displayName human-readable name broadcast to the others
      * @param config      capture, bitrate, and ICE (STUN/TURN) settings
      * @param createIfMissing open the meeting if the broker has no record of it
+     * @param isPrivate open it as a private meeting: everyone who joins afterwards waits
+     *   in [Admission.AWAITING_APPROVAL] until the host answers their [joinRequests]
+     *   entry. Only meaningful together with [createIfMissing] — privacy is a property of
+     *   the meeting, fixed when it is opened, and enforced by the broker.
      */
     fun join(
         brokerUrl: String,
@@ -74,12 +78,13 @@ class MeshCall(context: Context) {
         displayName: String,
         config: MeshCallConfig = MeshCallConfig(),
         createIfMissing: Boolean = false,
+        isPrivate: Boolean = false,
     ) {
         leave()
         val manager = MeshMeetingManager(appContext, brokerUrl, userId, displayName)
         managerFlow.value = manager
         currentMeetingId = meetingId
-        manager.join(meetingId, MediaConfig.from(config), createIfMissing)
+        manager.join(meetingId, MediaConfig.from(config), createIfMissing, isPrivate)
     }
 
     // ---- Observable state -------------------------------------------------------
@@ -153,6 +158,26 @@ class MeshCall(context: Context) {
         manager?.meetingNotFound ?: emptyFlow()
     }
 
+    /**
+     * Whether this device is in the meeting, still waiting at the door of a private one,
+     * or was turned away. Watch for [Admission.DENIED] the same way as [meetingNotFound]:
+     * it is terminal and the host app should navigate away.
+     */
+    val admission: Flow<Admission> = managerFlow.flatMapLatest { manager ->
+        manager?.admission ?: flowOf(Admission.JOINING)
+    }
+
+    /**
+     * People asking to be let into this private meeting, oldest first.
+     *
+     * Only ever non-empty for the host — the broker sends knocks nowhere else — so a UI
+     * can bind to this unconditionally and simply show nothing for everyone else. Answer
+     * with [admitParticipant] / [declineParticipant].
+     */
+    val joinRequests: Flow<List<JoinRequest>> = managerFlow.flatMapLatest { manager ->
+        manager?.joinRequests ?: flowOf(emptyList())
+    }
+
     /** Non-fatal errors worth surfacing (signaling drops, media failures). */
     val errors: Flow<String> = managerFlow.flatMapLatest { manager ->
         manager?.errors ?: emptyFlow()
@@ -171,6 +196,14 @@ class MeshCall(context: Context) {
      * [AudioRouteState.available] list — there is nothing to route to.
      */
     fun selectAudioRoute(route: AudioRoute) = meshManager?.selectAudioRoute(route)
+
+    /** Let [participantId] into this private meeting. Only the host's call is obeyed. */
+    fun admitParticipant(participantId: String) =
+        meshManager?.answerJoinRequest(participantId, admit = true)
+
+    /** Turn [participantId] away. Their session ends with [Admission.DENIED]. */
+    fun declineParticipant(participantId: String) =
+        meshManager?.answerJoinRequest(participantId, admit = false)
 
     /**
      * Start sharing the screen. The shared screen **replaces** this device's camera for
@@ -250,6 +283,32 @@ data class MeshParticipant(
 
 /** High-level session status. */
 enum class MeetingState { IDLE, CONNECTED }
+
+/** Someone waiting to be admitted to a private meeting. */
+data class JoinRequest(
+    val userId: String,
+    val userName: String,
+)
+
+/**
+ * Where this device stands with the meeting's door.
+ *
+ * Only private meetings ever reach [AWAITING_APPROVAL] or [DENIED] — a normal meeting
+ * goes straight from [JOINING] to [ADMITTED].
+ */
+enum class Admission {
+    /** Connecting; the broker has not answered yet. */
+    JOINING,
+
+    /** Private meeting: the host has been asked and has not decided. */
+    AWAITING_APPROVAL,
+
+    /** In the meeting. */
+    ADMITTED,
+
+    /** The host said no. Terminal — leave the screen. */
+    DENIED,
+}
 
 /**
  * Identity hook, so the SDK does not bake in an auth provider. Set it once at application

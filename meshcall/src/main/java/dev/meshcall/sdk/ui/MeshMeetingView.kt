@@ -20,8 +20,10 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import dev.meshcall.sdk.R
+import dev.meshcall.sdk.api.Admission
 import dev.meshcall.sdk.api.AudioRoute
 import dev.meshcall.sdk.api.AudioRouteState
+import dev.meshcall.sdk.api.JoinRequest
 import dev.meshcall.sdk.api.MeshCall
 import dev.meshcall.sdk.api.MeshParticipant
 import dev.meshcall.sdk.internal.util.MeshLog
@@ -83,6 +85,19 @@ class MeshMeetingView @JvmOverloads constructor(
     private val leaveButton: ImageButton
     private val participantsButton: ImageButton
     private val switchCameraButton: ImageButton
+
+    // Private-meeting chrome: the host's admit/decline card, and the waiting room the
+    // person outside sees.
+    private val joinRequestCard: LinearLayout
+    private val requestAvatar: TextView
+    private val requestName: TextView
+    private val requestMore: TextView
+    private val admitButton: TextView
+    private val declineButton: TextView
+    private val waitingOverlay: View
+
+    /** Oldest first; the card always answers [0] and counts the rest. */
+    private var joinRequests: List<JoinRequest> = emptyList()
 
     /** One built row per roster slot; kept parallel to [MeshCall.participants] by index. */
     private val participantRows = mutableListOf<ParticipantRow>()
@@ -146,6 +161,13 @@ class MeshMeetingView @JvmOverloads constructor(
         leaveButton = findViewById(R.id.meshcall_btn_leave)
         participantsButton = findViewById(R.id.meshcall_btn_participants)
         switchCameraButton = findViewById(R.id.meshcall_btn_switch_camera)
+        joinRequestCard = findViewById(R.id.meshcall_join_request_card)
+        requestAvatar = findViewById(R.id.meshcall_request_avatar)
+        requestName = findViewById(R.id.meshcall_request_name)
+        requestMore = findViewById(R.id.meshcall_request_more)
+        admitButton = findViewById(R.id.meshcall_btn_admit)
+        declineButton = findViewById(R.id.meshcall_btn_decline)
+        waitingOverlay = findViewById(R.id.meshcall_waiting_overlay)
 
         wireControls()
     }
@@ -163,6 +185,8 @@ class MeshMeetingView @JvmOverloads constructor(
             participantsPanel.visibility =
                 if (participantsPanel.visibility == VISIBLE) GONE else VISIBLE
         }
+        admitButton.setOnClickListener { answerFirstRequest(admit = true) }
+        declineButton.setOnClickListener { answerFirstRequest(admit = false) }
         meetingCodeLabel.setOnClickListener { copyMeetingCode() }
         leaveButton.setOnClickListener {
             if (confirmBeforeLeaving) confirmLeave() else leaveNow()
@@ -219,6 +243,13 @@ class MeshMeetingView @JvmOverloads constructor(
             }
         }
         viewScope.launch { call.frontCameraActive.collect(::applySwitchCameraButton) }
+        viewScope.launch { call.joinRequests.collect(::renderJoinRequests) }
+        viewScope.launch {
+            call.admission.collect { admission ->
+                waitingOverlay.visibility =
+                    if (admission == Admission.AWAITING_APPROVAL) VISIBLE else GONE
+            }
+        }
         viewScope.launch {
             call.audioRoute.collect { state ->
                 audioRouteState = state
@@ -254,6 +285,9 @@ class MeshMeetingView @JvmOverloads constructor(
         participantsList.removeAllViews()
         participantRows.clear()
         participantsPanel.visibility = GONE
+        joinRequests = emptyList()
+        joinRequestCard.visibility = GONE
+        waitingOverlay.visibility = GONE
     }
 
     /** Leave immediately, skipping the confirmation dialog. */
@@ -402,6 +436,37 @@ class MeshMeetingView @JvmOverloads constructor(
             else R.string.meshcall_desc_switch_to_front,
         )
         switchCameraButton.imageTintList = ColorStateList.valueOf(color(R.color.meshcall_white))
+    }
+
+    /**
+     * The host's door.
+     *
+     * One card at a time, always the oldest request, with the rest counted underneath —
+     * a stack of cards over the video would bury the meeting the host is still in, and
+     * queued knocks are answered in the order people arrived anyway.
+     */
+    private fun renderJoinRequests(requests: List<JoinRequest>) {
+        joinRequests = requests
+        val next = requests.firstOrNull()
+        if (next == null) {
+            joinRequestCard.visibility = GONE
+            return
+        }
+
+        requestAvatar.text = initialOf(next.userName)
+        requestName.text = next.userName
+        val waiting = requests.size - 1
+        requestMore.visibility = if (waiting > 0) VISIBLE else GONE
+        if (waiting > 0) {
+            requestMore.text = context.getString(R.string.meshcall_more_waiting, waiting)
+        }
+        joinRequestCard.visibility = VISIBLE
+    }
+
+    private fun answerFirstRequest(admit: Boolean) {
+        val request = joinRequests.firstOrNull() ?: return
+        val call = call ?: return
+        if (admit) call.admitParticipant(request.userId) else call.declineParticipant(request.userId)
     }
 
     /**

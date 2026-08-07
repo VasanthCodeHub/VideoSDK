@@ -36,6 +36,13 @@ internal class SocketIOSignalingClient(
     @Volatile private var createIfMissing = false
 
     /**
+     * Kept for the lifetime of the session, not just the first join: if the host is the
+     * last one out and reconnects into a meeting that emptied, the re-created meeting has
+     * to come back private. Dropping the flag on reconnect would quietly unlock the door.
+     */
+    @Volatile private var isPrivate = false
+
+    /**
      * Set once the broker has accepted us into the meeting. From then on every reconnect
      * may re-create it: the meeting can only have gone away because *we* were the last
      * one in it and got dropped, and that must not lock us out of our own call.
@@ -45,9 +52,10 @@ internal class SocketIOSignalingClient(
     /** Messages produced while the socket was down, replayed in order on reconnect. */
     private val pending = ArrayDeque<Pair<String, JSONObject>>()
 
-    override suspend fun connect(meetingId: String, createIfMissing: Boolean) {
+    override suspend fun connect(meetingId: String, createIfMissing: Boolean, isPrivate: Boolean) {
         currentMeetingId = meetingId
         this.createIfMissing = createIfMissing
+        this.isPrivate = isPrivate
         established = false
         // A fresh client is created per session, so disconnect() clears all handler state
         // and a previous socket is never reused here.
@@ -176,6 +184,41 @@ internal class SocketIOSignalingClient(
             s.disconnect()
             _events.tryEmit(SignalEvent.MeetingNotFound(meeting))
         }
+        s.on(SignalingSchema.TYPE_AWAITING_APPROVAL) { args ->
+            val meeting = args.firstOrNull()?.asJson()
+                ?.optString(SignalingSchema.KEY_MEETING)
+                ?.takeIf { it.isNotEmpty() }
+                ?: currentMeetingId.orEmpty()
+            MeshLog.i(TAG) { "waiting for the host to admit us to $meeting" }
+            // Deliberately stays connected: the socket *is* the pending request, and
+            // dropping it withdraws the knock.
+            _events.tryEmit(SignalEvent.AwaitingApproval(meeting))
+        }
+        s.on(SignalingSchema.TYPE_JOIN_DENIED) { args ->
+            val meeting = args.firstOrNull()?.asJson()
+                ?.optString(SignalingSchema.KEY_MEETING)
+                ?.takeIf { it.isNotEmpty() }
+                ?: currentMeetingId.orEmpty()
+            MeshLog.w(TAG, "host declined our request to join $meeting")
+            s.disconnect()
+            _events.tryEmit(SignalEvent.JoinDenied(meeting))
+        }
+        s.on(SignalingSchema.TYPE_KNOCK) { args ->
+            args.firstOrNull()?.asJson()?.let { j ->
+                val peerId = j.optString(SignalingSchema.KEY_USER_ID)
+                if (peerId.isEmpty()) return@let
+                MeshLog.i(TAG) { "knock from $peerId" }
+                _events.tryEmit(
+                    SignalEvent.Knock(peerId, j.optString(SignalingSchema.KEY_USER_NAME)),
+                )
+            }
+        }
+        s.on(SignalingSchema.TYPE_KNOCK_WITHDRAWN) { args ->
+            args.firstOrNull()?.asJson()?.let { j ->
+                val peerId = j.optString(SignalingSchema.KEY_USER_ID)
+                if (peerId.isNotEmpty()) _events.tryEmit(SignalEvent.KnockWithdrawn(peerId))
+            }
+        }
         s.on(SignalingSchema.TYPE_ERROR) { args ->
             args.firstOrNull()?.asJson()?.let { j ->
                 val message = j.optString(SignalingSchema.KEY_ERROR)
@@ -195,6 +238,7 @@ internal class SocketIOSignalingClient(
                 put(SignalingSchema.KEY_USER_ID, userId)
                 put(SignalingSchema.KEY_USER_NAME, userName)
                 put(SignalingSchema.KEY_CREATE, createIfMissing || established)
+                put(SignalingSchema.KEY_PRIVATE, isPrivate)
             },
         )
     }

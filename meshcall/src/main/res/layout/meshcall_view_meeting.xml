@@ -153,6 +153,111 @@
         </LinearLayout>
 
         <!--
+          Private meetings: whoever is host sees this above everything, because a person
+          stuck outside is waiting on exactly one tap. Only the host is ever sent knocks,
+          so for everyone else it simply never appears.
+        -->
+        <LinearLayout
+            android:id="@+id/meshcall_join_request_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:layout_margin="12dp"
+            android:background="@drawable/meshcall_bg_panel"
+            android:elevation="12dp"
+            android:orientation="vertical"
+            android:padding="14dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/meshcall_request_avatar"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="@drawable/meshcall_bg_avatar"
+                    android:gravity="center"
+                    android:textColor="@color/meshcall_white"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/meshcall_request_name"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="@color/meshcall_white"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/meshcall_request_subtitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/meshcall_wants_to_join"
+                        android:textColor="@color/meshcall_on_chrome_dim"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/meshcall_btn_decline"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/meshcall_bg_sheet_action"
+                    android:gravity="center"
+                    android:paddingVertical="12dp"
+                    android:text="@string/meshcall_decline"
+                    android:textColor="@color/meshcall_white"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/meshcall_btn_admit"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/meshcall_bg_sheet_action_primary"
+                    android:gravity="center"
+                    android:paddingVertical="12dp"
+                    android:text="@string/meshcall_admit"
+                    android:textColor="@color/meshcall_on_light"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/meshcall_request_more"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:textColor="@color/meshcall_on_chrome_dim"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!--
           The glass pill lives on the strip itself, not on the scroll view: the grid
           toggles the strip's visibility, and a background on the scroll view would leave
           an empty floating pill behind whenever nobody is in overflow.
@@ -177,6 +282,41 @@
                 android:paddingVertical="6dp"
                 android:visibility="gone" />
         </HorizontalScrollView>
+
+        <!--
+          Private meeting, waiting on the host. Covers the grid rather than sitting beside
+          it: nothing behind is worth looking at yet, and a live self-preview would read as
+          "you're in". A sibling on the window plane, never a background on the renderer —
+          see README §7 rule 6.
+        -->
+        <LinearLayout
+            android:id="@+id/meshcall_waiting_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/meshcall_scrim"
+            android:elevation="14dp"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingHorizontal="32dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/meshcall_waiting_title"
+                android:textColor="@color/meshcall_white"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:text="@string/meshcall_waiting_message"
+                android:textColor="@color/meshcall_on_chrome_dim"
+                android:textSize="14sp" />
+        </LinearLayout>
     </FrameLayout>
 
     <!-- Control bar -->

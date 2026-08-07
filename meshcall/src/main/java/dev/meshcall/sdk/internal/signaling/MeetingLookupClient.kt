@@ -1,5 +1,6 @@
 package dev.meshcall.sdk.internal.signaling
 
+import dev.meshcall.sdk.api.MeetingStatus
 import dev.meshcall.sdk.internal.util.MeshLog
 import io.socket.client.Ack
 import io.socket.client.IO
@@ -25,12 +26,12 @@ import kotlin.coroutines.resume
  */
 internal object MeetingLookupClient {
 
-    /** @return participants per requested code, or null if the broker could not be reached. */
+    /** @return status per requested code, or null if the broker could not be reached. */
     suspend fun check(
         brokerUrl: String,
         meetingIds: List<String>,
         timeoutMs: Long,
-    ): Map<String, Int>? {
+    ): Map<String, MeetingStatus>? {
         val requested = meetingIds.filter { it.isNotBlank() }.distinct()
         if (requested.isEmpty()) return emptyMap()
 
@@ -46,7 +47,7 @@ internal object MeetingLookupClient {
                 )
                 val done = AtomicBoolean(false)
 
-                fun finish(result: Map<String, Int>?) {
+                fun finish(result: Map<String, MeetingStatus>?) {
                     // Every path below can race the others (ack vs. connect error vs.
                     // cancellation), and resuming a continuation twice is a crash.
                     if (!done.compareAndSet(false, true)) return
@@ -83,20 +84,24 @@ internal object MeetingLookupClient {
      * out are reported as 0 rather than dropped, so callers can index the result by the
      * code they asked about without null-handling every entry.
      */
-    private fun parse(raw: Any?, requested: List<String>): Map<String, Int>? {
+    private fun parse(raw: Any?, requested: List<String>): Map<String, MeetingStatus>? {
         val json = raw as? JSONObject ?: return null
         val array = json.optJSONArray(SignalingSchema.KEY_MEETINGS) ?: return null
 
-        val counts = HashMap<String, Int>(requested.size)
-        requested.forEach { counts[it] = 0 }
+        val statuses = LinkedHashMap<String, MeetingStatus>(requested.size)
+        requested.forEach { statuses[it] = MeetingStatus(it, participantCount = 0) }
         for (i in 0 until array.length()) {
             val entry = array.optJSONObject(i) ?: continue
             val meeting = entry.optString(SignalingSchema.KEY_MEETING)
             if (meeting.isEmpty()) continue
-            counts[meeting] = entry.optInt(SignalingSchema.KEY_PARTICIPANTS, 0)
+            statuses[meeting] = MeetingStatus(
+                meetingId = meeting,
+                participantCount = entry.optInt(SignalingSchema.KEY_PARTICIPANTS, 0),
+                isPrivate = entry.optBoolean(SignalingSchema.KEY_PRIVATE, false),
+            )
         }
-        MeshLog.i(TAG) { "lookup: $counts" }
-        return counts
+        MeshLog.i(TAG) { "lookup: ${statuses.values}" }
+        return statuses
     }
 
     private const val TAG = "MeetingLookup"

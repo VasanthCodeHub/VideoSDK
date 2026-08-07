@@ -102,6 +102,7 @@ inflates under any host theme.
 | `MeshCall` | Session: `join(brokerUrl, meetingId, displayName, config, createIfMissing)`, `leave()`, `dispose()`, `toggleMic()`, `toggleCamera()`, `switchCamera()`, `setMic/setCamera` |
 | `MeshCall` flows | `participants`, `speaker`, `connected`, `localMedia`, `state`, `errors`, `meetingNotFound` — stable across joins; safe to collect before or after `join` |
 | `MeshMeetingDirectory` | `isLive(brokerUrl, code)` / `status(brokerUrl, codes)` — is that meeting joinable? Returns **null** when the broker is unreachable, which is not the same answer as "no" |
+| Private meetings | `join(..., isPrivate = true)` opens one; `admission` says whether you're in, waiting or refused; `joinRequests` + `admitParticipant`/`declineParticipant` are the host's door. `MeshMeetingView` renders both sides |
 | `MeshMeetingView` | The complete meeting screen. `attach(call, meetingId, showConnectionBanner)`, `detach()`, `leaveNow()`, callbacks `onLeave` / `onShareScreen` / `onMoreOptions`, flag `confirmBeforeLeaving` |
 | `MeshParticipantGrid` | Just the tile grid, for building a custom meeting screen. `bind`/`unbind`/`release`, `setPinned`, `setSpeaker`, `setLocalMediaState`, `onPinRequest` |
 | `MeshVideoRenderer` | `SurfaceViewRenderer` subclass, inflatable from XML |
@@ -200,8 +201,9 @@ run on a dedicated single-thread executor.
 
 | Event | Payload | Notes |
 |-------|---------|-------|
-| `join-meeting` | `{ meeting, userId, userName, create }` | Sent on **every** connect *and* reconnect. Server replies `meeting-members` and broadcasts `peer-joined`, or refuses with `meeting-not-found`. |
-| `check-meetings` | `{ meetings: [ code ] }` → **ack** `{ meetings: [ { meeting, participants } ] }` | Liveness lookup, answered over the Socket.IO ack. Allowed *before* `join-meeting` — the lobby asks precisely because it is in no meeting. Capped at 20 codes per call. |
+| `join-meeting` | `{ meeting, userId, userName, create, private }` | Sent on **every** connect *and* reconnect. Server replies `meeting-members` and broadcasts `peer-joined`, or refuses with `meeting-not-found`, or parks the socket with `awaiting-approval`. `private` is honored **only** on the join that creates the meeting. |
+| `admit-decision` | `{ userId, admit }` | The host's verdict on one knock. Obeyed only from the host's own sockets. |
+| `check-meetings` | `{ meetings: [ code ] }` → **ack** `{ meetings: [ { meeting, participants, private } ] }` | Liveness lookup, answered over the Socket.IO ack. Allowed *before* `join-meeting` — the lobby asks precisely because it is in no meeting. Capped at 20 codes per call. |
 | `offer` | `{ to, sdp: { type: "offer", sdp } }` | Relay to `to`, inject `from`. |
 | `answer` | `{ to, sdp: { type: "answer", sdp } }` | Relay to `to`, inject `from`. |
 | `ice-candidate` | `{ to, candidate: { candidate, sdpMLineIndex, sdpMid } }` | Relay to `to`, inject `from`. |
@@ -213,6 +215,10 @@ run on a dedicated single-thread executor.
 |-------|---------|-------|
 | `meeting-members` | `{ meeting, peers: [ { userId, userName } ] }` | Roster after join/rejoin. Peer key is **`userId`**. |
 | `meeting-not-found` | `{ meeting }` | Join refused: no such live meeting, and `create` was not set. Terminal — the client disconnects and leaves the screen. |
+| `awaiting-approval` | `{ meeting }` | Private meeting: you are in the waiting room. The socket **stays connected** — it *is* the pending request, and dropping it withdraws the knock. |
+| `join-denied` | `{ meeting }` | The host said no. Terminal. |
+| `knock` | `{ userId, userName, meeting }` | To the host only. Re-sent to whoever inherits the host role, so a queued request is never orphaned. |
+| `knock-withdrawn` | `{ userId }` | To the host only: that person gave up or dropped. |
 | `peer-joined` | `{ userId, userName, meeting }` | Broadcast. |
 | `peer-left` | `{ peerId }` | Broadcast on disconnect. |
 | `offer` / `answer` | `{ from, sdp: {...} }` | Forwarded. |
@@ -237,6 +243,15 @@ run on a dedicated single-thread executor.
 8. `check-meetings` answers a participant count per requested code (0 = not live) and
    nothing else. It never reveals who is in a meeting, and never lists meetings the
    caller did not name.
+9. **Private meetings are the broker's job, never the client's.** A flag the joining app
+   could ignore would be no gate at all. On a private meeting, a `userId` that has not
+   been admitted goes into the meeting's pending list — never into the roster — gets
+   `awaiting-approval`, and its knock is sent to the host. Nothing it emits is relayed,
+   because it never became a member.
+10. **Admission is keyed by `userId`, not socket**, so a reconnect never sends an
+    established participant back to the waiting room. `admit-decision` is honored only
+    from the current host's sockets, and the host role passes to the longest-standing
+    remaining member when the host leaves — along with the queue of people still waiting.
 
 ### SDK mapping
 
@@ -245,6 +260,8 @@ run on a dedicated single-thread executor.
 | `meeting-members` | `MeetingSnapshot(peers, meetingId)` |
 | `meeting-not-found` | `MeetingNotFound(meetingId)` → `MeshCall.meetingNotFound` |
 | `check-meetings` ack | `MeetingLookupClient` → `MeshMeetingDirectory.status/isLive` |
+| `awaiting-approval` / `join-denied` | `AwaitingApproval` / `JoinDenied` → `MeshCall.admission` |
+| `knock` / `knock-withdrawn` | `Knock` / `KnockWithdrawn` → `MeshCall.joinRequests` |
 | `peer-joined` / `peer-left` | `PeerJoined` / `PeerLeft` |
 | `offer` / `answer` | `Offer(from, SdpPayload)` / `Answer(from, SdpPayload)` |
 | `ice-candidate` | `IceCandidate(from, IceCandidatePayload)` |
@@ -320,6 +337,7 @@ symmetric NAT.
 | VC-020 | **Meeting UI moved into the SDK** | `MeshMeetingView` owns the screen; the app is lobby + permissions |
 | VC-019 | **Node.js signaling broker** | Implements §4 exactly; in-memory, single-process, Socket.IO v4. See `VideoSDKServer/server/` (separate repo) |
 | VC-022 | **Audio output routing** | Speaker / Bluetooth / wired / earpiece behind one control-bar button; `AudioRouteController` owns mode, focus and device changes. No Bluetooth permission needed |
+| VC-027 | **Private meetings** | Switch at creation time. Every later joiner knocks: broker parks them out of the roster, host gets an admit/decline card at the top of the meeting, joiner sees a waiting room. Broker-enforced, keyed by `userId`, host role and pending queue survive the host leaving (§4) |
 | VC-025 | **Meeting codes are validated** | A meeting exists only while somebody is in it: `check-meetings` gates the join dialog, `join-meeting` without `create` is refused with `meeting-not-found`, and Recent Meetings offers Rejoin only for codes the broker confirms are live. Needs the matching broker handlers (§4) |
 | VC-026 | **Display name** | Asked once on first launch, stored in `SharedPreferences`, sent as `userName` instead of `Build.MODEL`. Editable from the lobby's name chip |
 | VC-023 | **Screen share** | Replaces the camera on the existing sender via `setTrack` — no renegotiation, no new signaling. Foreground service (`mediaProjection`) + host-supplied consent Intent. Remote tiles crop it; see Partial |

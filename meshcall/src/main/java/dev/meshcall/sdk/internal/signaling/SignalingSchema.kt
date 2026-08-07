@@ -13,7 +13,8 @@ import org.json.JSONObject
  * `{type, payload}` envelope; the event name is the type.
  *
  * Client → server:
- *   join-meeting   { meeting, userId, userName, create }
+ *   join-meeting   { meeting, userId, userName, create, private }
+ *   admit-decision { userId, admit }                               // host only
  *   check-meetings { meetings: [ code ] }                          // Socket.IO ack reply
  *   offer          { to, sdp: { type, sdp } }
  *   answer         { to, sdp: { type, sdp } }
@@ -24,6 +25,10 @@ import org.json.JSONObject
  * Server → client (the broker always injects `from`):
  *   meeting-members   { meeting, peers: [ { userId, userName } ] }
  *   meeting-not-found { meeting }
+ *   awaiting-approval { meeting }                                  // private: you knocked
+ *   join-denied       { meeting }                                  // private: host said no
+ *   knock             { userId, userName, meeting }                // host only
+ *   knock-withdrawn   { userId }                                   // host only
  *   peer-joined       { userId, userName, meeting }
  *   peer-left         { peerId }
  *   offer / answer    { from, sdp: {...} }
@@ -39,6 +44,14 @@ import org.json.JSONObject
  * true. `create` belongs to the participant who started the meeting — and to anyone
  * already established in it whose socket reconnects, since a meeting that emptied while
  * its last participant was dropped must still be re-enterable by them.
+ *
+ * **Private meetings** are enforced by the broker, never by the client — a flag the
+ * joining app could ignore would be no gate at all. `private` is honored only on the
+ * `join-meeting` that *creates* the meeting; from then on anyone whose `userId` has not
+ * been admitted lands in the meeting's pending list and gets `awaiting-approval` while
+ * the host receives `knock`. Admission is keyed by `userId`, so a reconnect never sends
+ * an established participant back to the waiting room, and `admit-decision` is obeyed
+ * only from the host's own sockets.
  *
  * `mute-request` is a client-only contract today: the broker in `VideoSDKServer/server`
  * does not yet relay it, so [SocketIOSignalingClient] emits/listens for it but no
@@ -62,12 +75,19 @@ internal object SignalingSchema {
     const val KEY_PEER_ID = "peerId"
     const val KEY_PEERS = "peers"
     const val KEY_CREATE = "create"
+    const val KEY_PRIVATE = "private"
+    const val KEY_ADMIT = "admit"
     const val KEY_MEETINGS = "meetings"
     const val KEY_PARTICIPANTS = "participants"
 
     const val TYPE_JOIN_MEETING = "join-meeting"
     const val TYPE_CHECK_MEETINGS = "check-meetings"
     const val TYPE_MEETING_NOT_FOUND = "meeting-not-found"
+    const val TYPE_ADMIT_DECISION = "admit-decision"
+    const val TYPE_AWAITING_APPROVAL = "awaiting-approval"
+    const val TYPE_JOIN_DENIED = "join-denied"
+    const val TYPE_KNOCK = "knock"
+    const val TYPE_KNOCK_WITHDRAWN = "knock-withdrawn"
     const val TYPE_MEETING_MEMBERS = "meeting-members"
     const val TYPE_PEER_JOINED = "peer-joined"
     const val TYPE_PEER_LEFT = "peer-left"
