@@ -301,6 +301,7 @@
             android:visibility="gone">
 
             <TextView
+                android:id="@+id/meshcall_waiting_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/meshcall_waiting_title"
@@ -309,6 +310,7 @@
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/meshcall_waiting_message"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
@@ -316,6 +318,25 @@
                 android:text="@string/meshcall_waiting_message"
                 android:textColor="@color/meshcall_on_chrome_dim"
                 android:textSize="14sp" />
+
+            <!--
+              Only for the terminal states. While waiting there is nothing to acknowledge
+              — the control bar's leave button is still the way out.
+            -->
+            <TextView
+                android:id="@+id/meshcall_btn_overlay_leave"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:background="@drawable/meshcall_bg_sheet_action_primary"
+                android:gravity="center"
+                android:minWidth="160dp"
+                android:paddingVertical="12dp"
+                android:text="@string/meshcall_back_to_lobby"
+                android:textColor="@color/meshcall_on_light"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
         </LinearLayout>
     </FrameLayout>
 

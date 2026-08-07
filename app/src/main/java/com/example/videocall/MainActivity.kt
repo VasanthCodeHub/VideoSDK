@@ -45,6 +45,9 @@ class MainActivity : AppCompatActivity() {
     private var meetingStartedAt: Long = 0L
     private var lastParticipantCount: Int = 0
 
+    /** False while we were never admitted — a knock that was declined, or a dead code. */
+    private var enteredMeeting: Boolean = false
+
     private val permissions =
         arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
 
@@ -124,31 +127,19 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             mesh.participants.collect { peers -> lastParticipantCount = peers.size }
         }
-        // The lobby's check and this join are not atomic: a meeting can empty in between,
-        // and a launch straight from adb never checked at all. Leave without recording
-        // history — there was no meeting to record.
-        lifecycleScope.launch {
-            mesh.meetingNotFound.collect {
-                Toast.makeText(this@MainActivity, R.string.meeting_not_found, Toast.LENGTH_LONG)
-                    .show()
-                finish()
-            }
-        }
-        // Private meeting, host said no. The SDK shows the waiting room; only the host app
-        // can navigate away from it.
+        // Refused codes and declined requests are explained by the SDK's own full-screen
+        // state, so there is nothing to say here — the host app only has to know whether
+        // this was ever a real meeting, because one we never got into does not belong in
+        // Recent Meetings.
         lifecycleScope.launch {
             mesh.admission.collect { admission ->
-                if (admission == Admission.DENIED) {
-                    Toast.makeText(this@MainActivity, R.string.join_declined, Toast.LENGTH_LONG)
-                        .show()
-                    finish()
-                }
+                if (admission == Admission.ADMITTED) enteredMeeting = true
             }
         }
     }
 
     private fun saveMeetingHistory() {
-        if (meetingCode.isEmpty()) return
+        if (meetingCode.isEmpty() || !enteredMeeting) return
         lifecycleScope.launch {
             historyRepository.recordMeeting(
                 code = meetingCode,

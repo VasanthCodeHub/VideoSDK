@@ -40,6 +40,11 @@
     <string name="meshcall_more_waiting">%1$d more waiting</string>
     <string name="meshcall_waiting_title">Waiting to be let in</string>
     <string name="meshcall_waiting_message">This is a private meeting. The host has been asked to admit you.</string>
+    <string name="meshcall_denied_title">Not admitted</string>
+    <string name="meshcall_denied_message">The host declined your request to join this meeting.</string>
+    <string name="meshcall_ended_title">Meeting not found</string>
+    <string name="meshcall_ended_message">No meeting is running with this code. It may have already ended.</string>
+    <string name="meshcall_back_to_lobby">Leave</string>
 
     <!-- Screen share -->
     <string name="meshcall_screen_share_channel">Screen sharing</string>

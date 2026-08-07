@@ -95,6 +95,9 @@ class MeshMeetingView @JvmOverloads constructor(
     private val admitButton: TextView
     private val declineButton: TextView
     private val waitingOverlay: View
+    private val waitingTitle: TextView
+    private val waitingMessage: TextView
+    private val overlayLeaveButton: TextView
 
     /** Oldest first; the card always answers [0] and counts the rest. */
     private var joinRequests: List<JoinRequest> = emptyList()
@@ -168,6 +171,9 @@ class MeshMeetingView @JvmOverloads constructor(
         admitButton = findViewById(R.id.meshcall_btn_admit)
         declineButton = findViewById(R.id.meshcall_btn_decline)
         waitingOverlay = findViewById(R.id.meshcall_waiting_overlay)
+        waitingTitle = findViewById(R.id.meshcall_waiting_title)
+        waitingMessage = findViewById(R.id.meshcall_waiting_message)
+        overlayLeaveButton = findViewById(R.id.meshcall_btn_overlay_leave)
 
         wireControls()
     }
@@ -185,6 +191,8 @@ class MeshMeetingView @JvmOverloads constructor(
             participantsPanel.visibility =
                 if (participantsPanel.visibility == VISIBLE) GONE else VISIBLE
         }
+        // Already out of the meeting, so there is nothing to confirm leaving from.
+        overlayLeaveButton.setOnClickListener { leaveNow() }
         admitButton.setOnClickListener { answerFirstRequest(admit = true) }
         declineButton.setOnClickListener { answerFirstRequest(admit = false) }
         meetingCodeLabel.setOnClickListener { copyMeetingCode() }
@@ -246,8 +254,30 @@ class MeshMeetingView @JvmOverloads constructor(
         viewScope.launch { call.joinRequests.collect(::renderJoinRequests) }
         viewScope.launch {
             call.admission.collect { admission ->
-                waitingOverlay.visibility =
-                    if (admission == Admission.AWAITING_APPROVAL) VISIBLE else GONE
+                when (admission) {
+                    Admission.AWAITING_APPROVAL -> showOverlay(
+                        R.string.meshcall_waiting_title,
+                        R.string.meshcall_waiting_message,
+                        terminal = false,
+                    )
+
+                    Admission.DENIED -> showOverlay(
+                        R.string.meshcall_denied_title,
+                        R.string.meshcall_denied_message,
+                        terminal = true,
+                    )
+
+                    Admission.JOINING, Admission.ADMITTED -> hideOverlay()
+                }
+            }
+        }
+        viewScope.launch {
+            call.meetingNotFound.collect {
+                showOverlay(
+                    R.string.meshcall_ended_title,
+                    R.string.meshcall_ended_message,
+                    terminal = true,
+                )
             }
         }
         viewScope.launch {
@@ -287,7 +317,7 @@ class MeshMeetingView @JvmOverloads constructor(
         participantsPanel.visibility = GONE
         joinRequests = emptyList()
         joinRequestCard.visibility = GONE
-        waitingOverlay.visibility = GONE
+        hideOverlay()
     }
 
     /** Leave immediately, skipping the confirmation dialog. */
@@ -436,6 +466,32 @@ class MeshMeetingView @JvmOverloads constructor(
             else R.string.meshcall_desc_switch_to_front,
         )
         switchCameraButton.imageTintList = ColorStateList.valueOf(color(R.color.meshcall_white))
+    }
+
+    /**
+     * The full-screen state for someone who is not (or no longer) in the meeting.
+     *
+     * These outcomes are shown here rather than as a toast: a toast on top of a live
+     * meeting grid says nothing about *why* the grid is empty, and it is gone by the time
+     * anyone reads it. [terminal] states add the way out, because nothing further will
+     * happen on this screen.
+     */
+    private fun showOverlay(titleRes: Int, messageRes: Int, terminal: Boolean) {
+        waitingTitle.setText(titleRes)
+        waitingMessage.setText(messageRes)
+        overlayLeaveButton.visibility = if (terminal) VISIBLE else GONE
+        waitingOverlay.visibility = VISIBLE
+        // Nothing behind the overlay is actionable, and a pending knock cannot be
+        // answered by someone who was just turned away themselves.
+        if (terminal) {
+            setControlsEnabled(false)
+            joinRequestCard.visibility = GONE
+        }
+    }
+
+    private fun hideOverlay() {
+        waitingOverlay.visibility = GONE
+        overlayLeaveButton.visibility = GONE
     }
 
     /**

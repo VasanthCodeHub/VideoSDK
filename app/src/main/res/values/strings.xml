@@ -28,7 +28,6 @@
     <string name="checking_meeting">Checking…</string>
     <string name="meeting_not_found">No meeting is running with that code. It may have ended.</string>
     <string name="broker_unreachable">Can\'t reach the meeting server. Check your connection and try again.</string>
-    <string name="private_join_notice">Private meeting — the host will be asked to let you in.</string>
 
     <!-- Meeting code dialog -->
     <string name="your_meeting_code">Your meeting code</string>
@@ -37,8 +36,8 @@
     <string name="private_meeting_code_notice">Private — you\'ll be asked to admit each person who uses this code.</string>
     <string name="start_meeting">Start</string>
     <string name="copy">Copy</string>
+    <string name="copied">Copied</string>
     <string name="share">Share</string>
-    <string name="meeting_code_copied">Meeting code copied</string>
     <string name="share_meeting_title">Share meeting code</string>
     <string name="meeting_share_message">Join my meeting with code: %1$s</string>
 
@@ -52,9 +51,9 @@
     <string name="meeting_id_format">ID: %1$s</string>
     <string name="meeting_participants">Participants: %1$d</string>
     <string name="meeting_live">LIVE</string>
+    <string name="private_badge">PRIVATE</string>
     <string name="rejoin_meeting">Rejoin</string>
 
     <!-- Meeting screen (host-owned bits only; the rest lives in the SDK) -->
     <string name="permissions_required">Camera and microphone are required to join a meeting.</string>
-    <string name="join_declined">The host declined your request to join.</string>
 </resources>

@@ -7,7 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.View
-import android.widget.Toast
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -86,9 +86,7 @@ class LobbyActivity : AppCompatActivity() {
             if (meetings.isEmpty()) return@launch
 
             val statuses = MeshMeetingDirectory.status(DEFAULT_BROKER, meetings.map { it.code })
-            adapter.setLiveMeetings(
-                statuses.orEmpty().filter { it.isLive }.map { it.meetingId }.toSet(),
-            )
+            adapter.setLiveMeetings(statuses.orEmpty())
         }
     }
 
@@ -124,12 +122,18 @@ class LobbyActivity : AppCompatActivity() {
         dialogBinding.btnJoin.setOnClickListener {
             val code = dialogBinding.etMeetingCode.text.toString().trim().uppercase()
             if (code.isEmpty()) {
-                Toast.makeText(this, R.string.enter_meeting_code, Toast.LENGTH_SHORT).show()
+                showJoinError(dialogBinding.joinError, R.string.enter_meeting_code)
                 return@setOnClickListener
             }
-            verifyThenJoin(code, dialog, dialogBinding.btnJoin)
+            dialogBinding.joinError.visibility = View.GONE
+            verifyThenJoin(code, dialog, dialogBinding.btnJoin, dialogBinding.joinError)
         }
         dialog.show()
+    }
+
+    private fun showJoinError(errorLabel: TextView, messageRes: Int) {
+        errorLabel.setText(messageRes)
+        errorLabel.visibility = View.VISIBLE
     }
 
     /**
@@ -141,9 +145,15 @@ class LobbyActivity : AppCompatActivity() {
      *
      * "Not live" and "couldn't ask" are different failures and get different messages —
      * telling someone their code is wrong when the server is down sends them hunting for
-     * a problem that isn't theirs.
+     * a problem that isn't theirs. A private meeting needs no message at all: the meeting
+     * screen opens straight onto its own "waiting to be let in" state.
      */
-    private fun verifyThenJoin(code: String, dialog: AlertDialog, joinButton: MaterialButton) {
+    private fun verifyThenJoin(
+        code: String,
+        dialog: AlertDialog,
+        joinButton: MaterialButton,
+        errorLabel: TextView,
+    ) {
         joinButton.isEnabled = false
         joinButton.setText(R.string.checking_meeting)
         lifecycleScope.launch {
@@ -152,24 +162,9 @@ class LobbyActivity : AppCompatActivity() {
             joinButton.isEnabled = true
             joinButton.setText(R.string.join_meeting)
             when {
-                statuses == null ->
-                    Toast.makeText(this@LobbyActivity, R.string.broker_unreachable, Toast.LENGTH_LONG)
-                        .show()
-
-                status?.isLive != true ->
-                    Toast.makeText(this@LobbyActivity, R.string.meeting_not_found, Toast.LENGTH_LONG)
-                        .show()
-
+                statuses == null -> showJoinError(errorLabel, R.string.broker_unreachable)
+                status?.isLive != true -> showJoinError(errorLabel, R.string.meeting_not_found)
                 else -> {
-                    // Say up front that the door is guarded — the meeting screen would
-                    // otherwise just sit on a waiting overlay with no explanation of why.
-                    if (status.isPrivate) {
-                        Toast.makeText(
-                            this@LobbyActivity,
-                            R.string.private_join_notice,
-                            Toast.LENGTH_LONG,
-                        ).show()
-                    }
                     dialog.dismiss()
                     startMeeting(meetingCode = code)
                 }
@@ -191,7 +186,13 @@ class LobbyActivity : AppCompatActivity() {
         dialogBinding.btnClose.setOnClickListener { dialog.dismiss() }
         dialogBinding.btnCopy.setOnClickListener {
             copyToClipboard(meetingCode)
-            Toast.makeText(this, R.string.meeting_code_copied, Toast.LENGTH_SHORT).show()
+            // The button's own label confirms it, so the dialog says what happened
+            // without anything floating over it.
+            dialogBinding.copyLabel.setText(R.string.copied)
+            dialogBinding.copyLabel.postDelayed(
+                { dialogBinding.copyLabel.setText(R.string.copy) },
+                COPY_FEEDBACK_MS,
+            )
         }
         dialogBinding.btnShare.setOnClickListener { shareMeetingCode(meetingCode) }
         dialogBinding.btnStart.setOnClickListener {
@@ -263,6 +264,9 @@ class LobbyActivity : AppCompatActivity() {
 
         const val DEFAULT_BROKER = "wss://district-body-stumbling.ngrok-free.dev"
         const val MEETING_CODE_LENGTH = 6
+
+        /** How long the Copy button stays saying "Copied". */
+        const val COPY_FEEDBACK_MS = 1_600L
         const val MEETING_CLIP_LABEL = "meeting_code"
         const val MEETING_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
         val secureRandom = SecureRandom()

@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.inputmethod.EditorInfo
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -60,8 +59,11 @@ class NameEntryActivity : AppCompatActivity() {
 
     private fun saveName() {
         val name = binding.etDisplayName.text.toString().trim()
+        // On the field itself rather than a toast: the problem is with what was typed,
+        // and that is where the user is already looking.
+        binding.nameInputLayout.error = null
         if (name.isEmpty()) {
-            Toast.makeText(this, R.string.enter_your_name, Toast.LENGTH_SHORT).show()
+            binding.nameInputLayout.error = getString(R.string.enter_your_name)
             return
         }
         userPreferences.displayName = name
