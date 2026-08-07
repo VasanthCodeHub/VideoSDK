@@ -166,16 +166,17 @@ class LobbyActivity : AppCompatActivity() {
         dialogBinding.meetingCode.text = meetingCode
 
         val dialog = AlertDialog.Builder(this).setView(dialogBinding.root).create()
+        // Copying and sharing are things you often do both of, and neither ends this
+        // step — only Start or the close button does. Outside taps are ignored too: the
+        // code is gone for good once this closes, since nothing has been created yet.
+        dialog.setCanceledOnTouchOutside(false)
 
+        dialogBinding.btnClose.setOnClickListener { dialog.dismiss() }
         dialogBinding.btnCopy.setOnClickListener {
             copyToClipboard(meetingCode)
-            dialog.dismiss()
             Toast.makeText(this, R.string.meeting_code_copied, Toast.LENGTH_SHORT).show()
         }
-        dialogBinding.btnShare.setOnClickListener {
-            dialog.dismiss()
-            shareMeetingCode(meetingCode)
-        }
+        dialogBinding.btnShare.setOnClickListener { shareMeetingCode(meetingCode) }
         dialogBinding.btnStart.setOnClickListener {
             dialog.dismiss()
             // The only path allowed to open a meeting: this code was generated here and

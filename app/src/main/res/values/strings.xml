@@ -29,7 +29,8 @@
 
     <!-- Meeting code dialog -->
     <string name="your_meeting_code">Your meeting code</string>
-    <string name="share_meeting_hint">Share this code so others can join your meeting.</string>
+    <string name="share_meeting_hint">Share this code, then start the meeting — others can join once you\'re in.</string>
+    <string name="close">Close</string>
     <string name="start_meeting">Start</string>
     <string name="copy">Copy</string>
     <string name="share">Share</string>
