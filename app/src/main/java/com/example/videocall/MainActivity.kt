@@ -108,11 +108,29 @@ class MainActivity : AppCompatActivity() {
 
         val mesh = MeshCall(applicationContext)
         call = mesh
-        mesh.join(broker, meetingId, name, MeshCallConfig(iceServers = ICE_SERVERS))
+        // Only the participant who started the meeting may bring it into existence; the
+        // lobby has already checked that everyone else's code is live.
+        mesh.join(
+            brokerUrl = broker,
+            meetingId = meetingId,
+            displayName = name,
+            config = MeshCallConfig(iceServers = ICE_SERVERS),
+            createIfMissing = intent.getBooleanExtra(EXTRA_CREATE, false),
+        )
         binding.meetingView.attach(mesh, meetingId, showConnectionBanner = true)
 
         lifecycleScope.launch {
             mesh.participants.collect { peers -> lastParticipantCount = peers.size }
+        }
+        // The lobby's check and this join are not atomic: a meeting can empty in between,
+        // and a launch straight from adb never checked at all. Leave without recording
+        // history — there was no meeting to record.
+        lifecycleScope.launch {
+            mesh.meetingNotFound.collect {
+                Toast.makeText(this@MainActivity, R.string.meeting_not_found, Toast.LENGTH_LONG)
+                    .show()
+                finish()
+            }
         }
     }
 
@@ -150,6 +168,7 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_MEETING = "meeting"
         const val EXTRA_TITLE = "title"
         const val EXTRA_NAME = "name"
+        const val EXTRA_CREATE = "create"
         const val DEFAULT_BROKER = "wss://district-body-stumbling.ngrok-free.dev"
         const val DEFAULT_MEETING = "ABC123"
 

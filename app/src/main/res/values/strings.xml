@@ -23,6 +23,9 @@
     <string name="or_join_with_code">or join with a code</string>
     <string name="meeting_code_hint">Meeting code</string>
     <string name="enter_meeting_code">Enter a meeting code to join</string>
+    <string name="checking_meeting">Checking…</string>
+    <string name="meeting_not_found">No meeting is running with that code. It may have ended.</string>
+    <string name="broker_unreachable">Can\'t reach the meeting server. Check your connection and try again.</string>
 
     <!-- Meeting code dialog -->
     <string name="your_meeting_code">Your meeting code</string>
@@ -43,6 +46,8 @@
     <string name="meeting_chip_yesterday">YESTERDAY</string>
     <string name="meeting_id_format">ID: %1$s</string>
     <string name="meeting_participants">Participants: %1$d</string>
+    <string name="meeting_live">LIVE</string>
+    <string name="rejoin_meeting">Rejoin</string>
 
     <!-- Meeting screen (host-owned bits only; the rest lives in the SDK) -->
     <string name="permissions_required">Camera and microphone are required to join a meeting.</string>

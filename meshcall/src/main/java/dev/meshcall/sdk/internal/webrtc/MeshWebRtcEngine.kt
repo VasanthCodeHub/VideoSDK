@@ -266,30 +266,153 @@ internal class MeshWebRtcEngine(
         // outgoingVideo, not localVideoTrack: someone joining mid-share must receive the
         // screen, otherwise they sit looking at a camera feed nobody else can see.
         outgoingVideo?.let { pc.addTrack(it, listOf(LOCAL_STREAM_ID)) }
-        capVideoSenderBitrate(pc)
+        // Retune before registering: one more link narrows the per-link share for everyone
+        // already connected, and this connection then joins them at the new tier.
+        retuneForLinkCount(peerRecords.size + 1)
+        applyVideoQuality(pc)
 
         peerRecords[peerId] = holder
         MeshLog.d(TAG) { "peer connection created for $peerId" }
         return holder
     }
 
+    // ---- Encoder tuning -----------------------------------------------------------
+
     /**
-     * Enforce [MediaConfig.maxVideoKbps] on the local video sender. The SDP `b=TIAS`
-     * line is only a hint; the encoder consults the sender's encoding parameters, so
-     * without this the cap is frequently ignored and video bursts well past it (or the
-     * encoder runs unbounded and starves the mesh uplink).
+     * What the camera is encoded at right now: one rung of the quality ladder.
+     *
+     * Resolution and bitrate travel together on purpose. Bits per pixel is what the eye
+     * reads as "quality", so cutting the bitrate without cutting the resolution just
+     * spreads the same bits thinner and every tile goes soft — the classic mesh failure at
+     * 5 people. Stepping both down keeps the picture sharp on a smaller frame, which is
+     * what a shrinking grid tile wants anyway.
+     *
+     * Frame rate is deliberately *not* on this ladder. libwebrtc's own degradation logic
+     * already trades frame rate against resolution using the bitrate it has actually
+     * measured; a second, static frame-rate cap layered on top only fights it.
      */
-    private fun capVideoSenderBitrate(pc: PeerConnection) {
-        if (config.maxVideoKbps <= 0) return
-        val track = localVideoTrack ?: return
+    private data class VideoTier(
+        val width: Int,
+        val height: Int,
+        val kbps: Int,
+    )
+
+    /** Live tier, so senders created later join at the same settings as everyone else. */
+    @Volatile private var videoTier: VideoTier = tierForLinks(0)
+
+    /**
+     * Re-derive the quality tier for [links] outgoing streams and push it to the capture
+     * source and every existing sender.
+     *
+     * Called from [preparePeerConnection] and [releasePeer], so the encoder retunes itself
+     * the moment somebody joins or leaves: five people share the uplink budget five ways,
+     * and the moment two of them drop the remaining links climb back up.
+     */
+    private fun retuneForLinkCount(links: Int) {
+        val tier = tierForLinks(links)
+        if (tier == videoTier) return
+        videoTier = tier
+        MeshLog.i(TAG) {
+            "video tier for $links link(s): ${tier.width}x${tier.height} ≤${tier.kbps}kbps"
+        }
+        // The camera source, not the capturer: adapting the source scales frames on their
+        // way to the encoder, where restarting the capturer would blank the preview and
+        // take a second of camera re-open for the same result.
+        if (!isScreenSharing) applyCaptureFormat(tier)
+        peerRecords.values.forEach { holder -> holder.pc?.let(::applyVideoQuality) }
+    }
+
+    private fun applyCaptureFormat(tier: VideoTier) {
+        videoSource?.adaptOutputFormat(tier.width, tier.height, config.frameRate)
+    }
+
+    /**
+     * Bitrate the outgoing video is allowed right now: the tier's, raised while sharing a
+     * screen.
+     *
+     * A shared screen is read, not watched — text falls apart at a bitrate a face survives
+     * happily. The raise costs little in practice: screencast content is mostly static, so
+     * the average sits far below the ceiling, and only one person usually shares.
+     */
+    private fun outgoingKbps(): Int {
+        val kbps = videoTier.kbps
+        if (kbps <= 0) return 0
+        return if (isScreenSharing) {
+            maxOf(kbps, minOf(SCREEN_MIN_KBPS, config.maxVideoKbps))
+        } else {
+            kbps
+        }
+    }
+
+    /**
+     * Per-link bitrate for [links] outgoing streams: an even split of
+     * [MediaConfig.uplinkBudgetKbps], clamped to [MediaConfig.maxVideoKbps] at the top and
+     * to [MIN_PER_LINK_KBPS] at the bottom.
+     *
+     * The floor matters: past a handful of peers an even split alone would starve every
+     * stream into unwatchability, and it is better to ask for slightly more than the budget
+     * and let congestion control arbitrate than to hand the encoder a number no picture can
+     * survive.
+     */
+    private fun perLinkKbps(links: Int): Int {
+        val ceiling = config.maxVideoKbps
+        if (ceiling <= 0) return 0
+        if (links <= 1 || config.uplinkBudgetKbps <= 0) return ceiling
+        val floor = minOf(MIN_PER_LINK_KBPS, ceiling)
+        return (config.uplinkBudgetKbps / links).coerceIn(floor, ceiling)
+    }
+
+    /**
+     * The rung to encode at for [links] peers. Resolution follows the bitrate, and the
+     * configured capture size is always the ceiling — a host that asked for 480p never
+     * gets 720p because the meeting happens to be small.
+     *
+     * The thresholds are calibrated so the default 1000 kbps ceiling lands on 720p: at the
+     * default budget nothing steps down until the fourth link (five participants), and
+     * meetings smaller than that encode exactly as they did before this ladder existed.
+     */
+    private fun tierForLinks(links: Int): VideoTier {
+        val kbps = perLinkKbps(links)
+        // Uncapped (maxVideoKbps = 0) means the host took the wheel: capture as configured.
+        val rung = when {
+            kbps <= 0 || kbps >= 850 -> 1280 to 720
+            kbps >= 600 -> 960 to 540
+            kbps >= 450 -> 848 to 480
+            else -> 640 to 360
+        }
+        return VideoTier(
+            width = minOf(rung.first, config.videoWidth),
+            height = minOf(rung.second, config.videoHeight),
+            kbps = kbps,
+        )
+    }
+
+    /**
+     * Apply the live [videoTier]'s bitrate ceiling to this connection's video sender.
+     *
+     * The SDP `b=TIAS` line is only a hint; the encoder consults the sender's encoding
+     * parameters, so without this the cap is frequently ignored and video bursts well past
+     * it (or runs unbounded and starves the mesh uplink).
+     *
+     * A *ceiling* is all that is set here. Nothing seeds the bandwidth estimate and nothing
+     * pins the frame rate: congestion control measures the real link and picks the send
+     * rate under this bound, which is the one thing in the stack that knows what the
+     * network can actually carry. See the note on [MIN_PER_LINK_KBPS].
+     *
+     * Senders are matched by kind rather than against [localVideoTrack]: while sharing, the
+     * attached track is the screen, and identity matching skipped it — so screen share used
+     * to go out completely uncapped.
+     */
+    private fun applyVideoQuality(pc: PeerConnection) {
+        val kbps = outgoingKbps()
+        if (kbps <= 0) return
         pc.senders.forEach { sender ->
-            if (sender.track() !== track) return@forEach
-            val params = sender.parameters
-            params.encodings.forEach { it.maxBitrateBps = config.maxVideoKbps * 1000 }
-            if (sender.setParameters(params)) {
-                MeshLog.d(TAG) { "video sender capped at ${config.maxVideoKbps}kbps" }
-            } else {
-                MeshLog.w(TAG, "setParameters failed; video sender uncapped")
+            if (sender.track()?.kind() != VIDEO_KIND) return@forEach
+            val params = sender.parameters ?: return@forEach
+            if (params.encodings.isEmpty()) return@forEach
+            params.encodings.forEach { it.maxBitrateBps = kbps * 1000 }
+            if (!sender.setParameters(params)) {
+                MeshLog.w(TAG, "setParameters failed; video sender left at encoder defaults")
             }
         }
     }
@@ -478,6 +601,8 @@ internal class MeshWebRtcEngine(
     fun releasePeer(peerId: String) {
         peerRecords.remove(peerId)?.dispose()
         lastStreamIdByPeer.remove(peerId)
+        // One fewer stream to feed: whoever is left gets a bigger share of the uplink.
+        retuneForLinkCount(peerRecords.size)
     }
 
     // ---- Screen share -------------------------------------------------------------
@@ -574,6 +699,11 @@ internal class MeshWebRtcEngine(
         screenTextureHelper?.dispose()
         screenTextureHelper = null
 
+        // The tier may have moved while sharing (someone joined), and retuning skips the
+        // camera source whenever the screen is the thing being encoded — so the format is
+        // re-applied here before the camera goes back on the wire.
+        applyCaptureFormat(videoTier)
+
         // Only resume the camera if it was meant to be on — a user who shared with the
         // camera already off should not find it switched on when they stop.
         if (cameraEnabled) startCapture()
@@ -600,7 +730,7 @@ internal class MeshWebRtcEngine(
                     MeshLog.w(TAG, "setTrack failed on ${holder.peerId}")
                 }
             }
-            capVideoSenderBitrate(pc)
+            applyVideoQuality(pc)
         }
     }
 
@@ -760,15 +890,15 @@ internal class MeshWebRtcEngine(
         }
 
         val source = f.createVideoSource(false)
+        videoSource = source
         // Different physical cameras expose different supported-format tables, so the
         // capturer's own "closest match" to (videoWidth, videoHeight) can legitimately
         // differ between front and back — e.g. the back sensor lands on a larger frame
         // than the front one did. Without this, that larger frame is encoded through the
-        // same fixed bitrate cap (capVideoSenderBitrate), which reads as a quality drop
-        // after switching camera. Clamping the source output pins the encoded resolution
-        // to the configured target regardless of which camera actually captured it.
-        source.adaptOutputFormat(config.videoWidth, config.videoHeight, config.frameRate)
-        videoSource = source
+        // same bitrate ceiling, which reads as a quality drop after switching camera.
+        // Clamping the source output pins the encoded resolution to the current tier
+        // regardless of which camera actually captured it.
+        applyCaptureFormat(videoTier)
         localVideoTrack = f.createVideoTrack(VIDEO_TRACK_ID, source)
         try {
             capturer.initialize(helper, appContext, source.capturerObserver)
@@ -800,7 +930,7 @@ internal class MeshWebRtcEngine(
     private fun applyBitrateCap(description: SessionDescription): SessionDescription =
         SessionDescription(
             description.type,
-            SdpTransform.applyVideoBitrateCap(description.description, config.maxVideoKbps),
+            SdpTransform.applyVideoBitrateCap(description.description, outgoingKbps()),
         )
 
     /**
@@ -888,6 +1018,24 @@ internal class MeshWebRtcEngine(
          * mesh uploads the stream once per peer, so native capture would swamp the uplink.
          */
         const val MAX_SCREEN_EDGE = 1280
+
+        /**
+         * Floor for the per-link bitrate split. Below roughly this, even a 360p tile stops
+         * being worth looking at, so the split stops dividing and the meeting is allowed to
+         * ask for more than the uplink budget.
+         *
+         * That is safe only because every number here is a *ceiling*, never a target.
+         * Congestion control still measures the link and sends under it. An earlier revision
+         * of this file also seeded the bandwidth estimate via `PeerConnection.setBitrate`,
+         * which does the opposite — it overrides the measurement — and the result was an
+         * encoder that overshot the uplink, took loss, crashed down and probed back up, on
+         * a loop. Video was sharp or blocky depending on which phase you caught. Do not
+         * reintroduce a start bitrate.
+         */
+        const val MIN_PER_LINK_KBPS = 450
+
+        /** Bitrate floor while sharing a screen, where legible text needs the headroom. */
+        const val SCREEN_MIN_KBPS = 900
 
         /** Bound the pre-remote-description candidate buffer. */
         const val MAX_PENDING_CANDIDATES = 128

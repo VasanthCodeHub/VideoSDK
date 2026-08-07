@@ -20,6 +20,8 @@ import com.example.videocall.databinding.ActivityLobbyBinding
 import com.example.videocall.databinding.DialogCreateMeetingBinding
 import com.example.videocall.databinding.DialogJoinMeetingBinding
 import com.example.videocall.databinding.DialogMeetingCodeBinding
+import com.google.android.material.button.MaterialButton
+import dev.meshcall.sdk.api.MeshMeetingDirectory
 import kotlinx.coroutines.launch
 import java.security.SecureRandom
 
@@ -34,7 +36,11 @@ class LobbyActivity : AppCompatActivity() {
     private lateinit var binding: ActivityLobbyBinding
     private val repository by lazy { MeetingHistoryRepository(applicationContext) }
     private val userPreferences by lazy { UserPreferences(applicationContext) }
-    private val adapter = RecentMeetingAdapter()
+
+    /** Rejoin is only offered for meetings the broker says are still live — see [loadRecentMeetings]. */
+    private val adapter = RecentMeetingAdapter { meeting ->
+        startMeeting(meetingCode = meeting.code, title = meeting.title)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +67,14 @@ class LobbyActivity : AppCompatActivity() {
         loadRecentMeetings()
     }
 
+    /**
+     * Load history, then ask the broker which of those codes still has somebody in it.
+     *
+     * The list renders immediately and grows its Rejoin buttons a moment later, rather
+     * than waiting on the network: history is local and always correct, liveness is not.
+     * Anything unproven — including an unreachable broker — stays hidden, so Rejoin never
+     * appears on a meeting that would refuse the join.
+     */
     private fun loadRecentMeetings() {
         lifecycleScope.launch {
             val meetings = repository.recentMeetings()
@@ -69,6 +83,12 @@ class LobbyActivity : AppCompatActivity() {
                 if (meetings.isEmpty()) View.VISIBLE else View.GONE
             binding.recentMeetingsList.visibility =
                 if (meetings.isEmpty()) View.GONE else View.VISIBLE
+            if (meetings.isEmpty()) return@launch
+
+            val statuses = MeshMeetingDirectory.status(DEFAULT_BROKER, meetings.map { it.code })
+            adapter.setLiveMeetings(
+                statuses.orEmpty().filter { it.isLive }.map { it.meetingId }.toSet(),
+            )
         }
     }
 
@@ -103,10 +123,42 @@ class LobbyActivity : AppCompatActivity() {
                 Toast.makeText(this, R.string.enter_meeting_code, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            dialog.dismiss()
-            startMeeting(meetingCode = code)
+            verifyThenJoin(code, dialog, dialogBinding.btnJoin)
         }
         dialog.show()
+    }
+
+    /**
+     * Check the code with the broker before opening the meeting screen.
+     *
+     * Without this a wrong code used to *create* a meeting of one: the joiner sat alone
+     * in a working call, with nothing to say they had mistyped. The dialog stays open
+     * while the check runs so the code is still there to correct.
+     *
+     * "Not live" and "couldn't ask" are different failures and get different messages —
+     * telling someone their code is wrong when the server is down sends them hunting for
+     * a problem that isn't theirs.
+     */
+    private fun verifyThenJoin(code: String, dialog: AlertDialog, joinButton: MaterialButton) {
+        joinButton.isEnabled = false
+        joinButton.setText(R.string.checking_meeting)
+        lifecycleScope.launch {
+            val live = MeshMeetingDirectory.isLive(DEFAULT_BROKER, code)
+            joinButton.isEnabled = true
+            joinButton.setText(R.string.join_meeting)
+            when (live) {
+                true -> {
+                    dialog.dismiss()
+                    startMeeting(meetingCode = code)
+                }
+                false ->
+                    Toast.makeText(this@LobbyActivity, R.string.meeting_not_found, Toast.LENGTH_LONG)
+                        .show()
+                null ->
+                    Toast.makeText(this@LobbyActivity, R.string.broker_unreachable, Toast.LENGTH_LONG)
+                        .show()
+            }
+        }
     }
 
     private fun showMeetingCodeDialog(meetingCode: String, title: String) {
@@ -126,7 +178,9 @@ class LobbyActivity : AppCompatActivity() {
         }
         dialogBinding.btnStart.setOnClickListener {
             dialog.dismiss()
-            startMeeting(meetingCode = meetingCode, title = title)
+            // The only path allowed to open a meeting: this code was generated here and
+            // exists nowhere until somebody starts it.
+            startMeeting(meetingCode = meetingCode, title = title, create = true)
         }
         dialog.show()
     }
@@ -152,13 +206,15 @@ class LobbyActivity : AppCompatActivity() {
     private fun startMeeting(
         meetingCode: String,
         title: String = "",
+        create: Boolean = false,
     ) {
         startActivity(
             Intent(this, MainActivity::class.java)
                 .putExtra(EXTRA_BROKER, DEFAULT_BROKER)
                 .putExtra(EXTRA_MEETING, meetingCode)
                 .putExtra(EXTRA_TITLE, title)
-                .putExtra(EXTRA_NAME, userPreferences.displayName),
+                .putExtra(EXTRA_NAME, userPreferences.displayName)
+                .putExtra(EXTRA_CREATE, create),
         )
     }
 
@@ -177,6 +233,7 @@ class LobbyActivity : AppCompatActivity() {
         const val EXTRA_MEETING = "meeting"
         const val EXTRA_TITLE = "title"
         const val EXTRA_NAME = "name"
+        const val EXTRA_CREATE = "create"
 
         const val DEFAULT_BROKER = "wss://district-body-stumbling.ngrok-free.dev"
         const val MEETING_CODE_LENGTH = 6

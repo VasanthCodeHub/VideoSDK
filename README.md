@@ -17,15 +17,31 @@ connects directly to everyone else. But the mesh has a real ceiling, and it is w
 knowing exactly where it is.
 
 With N participants, each phone holds N−1 connections and **uploads its own video N−1
-times** — it never relays anyone else's:
+times** — it never relays anyone else's. A fixed per-link cap therefore multiplies: five
+people at 1 Mbps each is 4 Mbps off one phone, well past a normal uplink, and congestion
+control then claws it back unevenly until every tile goes soft at once.
 
-| People | Uplinks each | Upload @ 500 kbps cap | Concurrent encoders |
-|--------|--------------|-----------------------|---------------------|
-| 3 | 2 | ~1.0 Mbps | 2 |
-| 4 | 3 | ~1.5 Mbps | 3 |
-| 5 | 4 | ~2.0 Mbps | 4 |
-| 6 | 5 | ~2.5 Mbps | 5 |
-| 8 | 7 | ~3.5 Mbps | 7 |
+So the cap is not fixed. The SDK splits an **uplink budget** (3 Mbps by default) across the
+live links and steps capture resolution down with it, keeping bits-per-pixel roughly
+constant — a smaller, sharp picture instead of a mushy 720p one. It retunes the instant
+somebody joins or leaves:
+
+| People | Uplinks each | Per link | Encoded at | Upload | Concurrent encoders |
+|--------|--------------|----------|------------|--------|---------------------|
+| 2 | 1 | 1000 kbps | 720p | ~1.0 Mbps | 1 |
+| 3 | 2 | 1000 kbps | 720p | ~2.0 Mbps | 2 |
+| 4 | 3 | 1000 kbps | 720p | ~3.0 Mbps | 3 |
+| 5 | 4 | 750 kbps | 540p | ~3.0 Mbps | 4 |
+| 6 | 5 | 600 kbps | 540p | ~3.0 Mbps | 5 |
+| 8 | 7 | 450 kbps (floor) | 480p | ~3.2 Mbps | 7 |
+
+At the default budget the split only bites from the **fourth link on** — two, three and four
+participants each get the full 1000 kbps ceiling at 720p, exactly as they did before the
+ladder existed. That restraint is deliberate: see pitfall 14.
+
+Every number in that table is a **ceiling, never a target**. Congestion control measures the
+link and picks the send rate underneath it, and frame rate is left entirely to libwebrtc's
+own degradation logic. Nothing here seeds or overrides the bandwidth estimate.
 
 Bandwidth is the lesser problem. The wall is **hardware encoders**: each PeerConnection
 runs its own encoder instance, and most Android SoCs support only ~2–4 concurrent
@@ -83,12 +99,13 @@ inflates under any host theme.
 
 | Type | Purpose |
 |------|---------|
-| `MeshCall` | Session: `join(brokerUrl, meetingId, displayName, config)`, `leave()`, `dispose()`, `toggleMic()`, `toggleCamera()`, `switchCamera()`, `setMic/setCamera` |
-| `MeshCall` flows | `participants`, `speaker`, `connected`, `localMedia`, `state`, `errors` — stable across joins; safe to collect before or after `join` |
+| `MeshCall` | Session: `join(brokerUrl, meetingId, displayName, config, createIfMissing)`, `leave()`, `dispose()`, `toggleMic()`, `toggleCamera()`, `switchCamera()`, `setMic/setCamera` |
+| `MeshCall` flows | `participants`, `speaker`, `connected`, `localMedia`, `state`, `errors`, `meetingNotFound` — stable across joins; safe to collect before or after `join` |
+| `MeshMeetingDirectory` | `isLive(brokerUrl, code)` / `status(brokerUrl, codes)` — is that meeting joinable? Returns **null** when the broker is unreachable, which is not the same answer as "no" |
 | `MeshMeetingView` | The complete meeting screen. `attach(call, meetingId, showConnectionBanner)`, `detach()`, `leaveNow()`, callbacks `onLeave` / `onShareScreen` / `onMoreOptions`, flag `confirmBeforeLeaving` |
 | `MeshParticipantGrid` | Just the tile grid, for building a custom meeting screen. `bind`/`unbind`/`release`, `setPinned`, `setSpeaker`, `setLocalMediaState`, `onPinRequest` |
 | `MeshVideoRenderer` | `SurfaceViewRenderer` subclass, inflatable from XML |
-| `MeshCallConfig` | Resolution, frame rate, bitrate cap, initial mic/camera, **ICE servers (STUN/TURN)** |
+| `MeshCallConfig` | Capture ceiling (resolution, frame rate), per-link `maxVideoKbps` + total `uplinkBudgetKbps`, initial mic/camera, **ICE servers (STUN/TURN)** |
 | `IceServerConfig` | One STUN/TURN entry (`urls`, `username`, `credential`) |
 | `MeshParticipant` | Roster entry: `id`, `userName`, `micEnabled`, `cameraEnabled`, `connectionState` |
 | `LocalMediaState` | The SDK's authoritative mic/camera state — bind controls to this, never to a local mirror |
@@ -176,12 +193,15 @@ run on a dedicated single-thread executor.
 - Relay rule: payload has `to` → deliver to that user's sockets only; no `to` → broadcast
   to the meeting.
 - Additive fields only. Clients ignore unknown keys.
+- **A meeting exists only while at least one participant is in it.** The broker keeps no
+  meeting records; a code is live iff somebody is connected to it.
 
 ### Client → Server
 
 | Event | Payload | Notes |
 |-------|---------|-------|
-| `join-meeting` | `{ meeting, userId, userName }` | Sent on **every** connect *and* reconnect. Server replies `meeting-members` and broadcasts `peer-joined`. |
+| `join-meeting` | `{ meeting, userId, userName, create }` | Sent on **every** connect *and* reconnect. Server replies `meeting-members` and broadcasts `peer-joined`, or refuses with `meeting-not-found`. |
+| `check-meetings` | `{ meetings: [ code ] }` → **ack** `{ meetings: [ { meeting, participants } ] }` | Liveness lookup, answered over the Socket.IO ack. Allowed *before* `join-meeting` — the lobby asks precisely because it is in no meeting. Capped at 20 codes per call. |
 | `offer` | `{ to, sdp: { type: "offer", sdp } }` | Relay to `to`, inject `from`. |
 | `answer` | `{ to, sdp: { type: "answer", sdp } }` | Relay to `to`, inject `from`. |
 | `ice-candidate` | `{ to, candidate: { candidate, sdpMLineIndex, sdpMid } }` | Relay to `to`, inject `from`. |
@@ -192,6 +212,7 @@ run on a dedicated single-thread executor.
 | Event | Payload | Notes |
 |-------|---------|-------|
 | `meeting-members` | `{ meeting, peers: [ { userId, userName } ] }` | Roster after join/rejoin. Peer key is **`userId`**. |
+| `meeting-not-found` | `{ meeting }` | Join refused: no such live meeting, and `create` was not set. Terminal — the client disconnects and leaves the screen. |
 | `peer-joined` | `{ userId, userName, meeting }` | Broadcast. |
 | `peer-left` | `{ peerId }` | Broadcast on disconnect. |
 | `offer` / `answer` | `{ from, sdp: {...} }` | Forwarded. |
@@ -208,12 +229,22 @@ run on a dedicated single-thread executor.
 5. On reconnect the client re-sends `join-meeting` — re-broadcast presence and reply with
    the roster **including the re-joiner**.
 6. Never send UI-specific payloads. Never inspect SDP.
+7. **Never create a meeting implicitly.** `join-meeting` for a meeting nobody is in is
+   refused with `meeting-not-found` unless `create: true`. The client sets `create` when
+   the user *started* the meeting, and on any reconnect after it was already accepted —
+   a participant left alone must be able to come back to a meeting that emptied while
+   their socket was down.
+8. `check-meetings` answers a participant count per requested code (0 = not live) and
+   nothing else. It never reveals who is in a meeting, and never lists meetings the
+   caller did not name.
 
 ### SDK mapping
 
 | Protocol event | Kotlin (`SignalEvent`) |
 |----------------|------------------------|
 | `meeting-members` | `MeetingSnapshot(peers, meetingId)` |
+| `meeting-not-found` | `MeetingNotFound(meetingId)` → `MeshCall.meetingNotFound` |
+| `check-meetings` ack | `MeetingLookupClient` → `MeshMeetingDirectory.status/isLive` |
 | `peer-joined` / `peer-left` | `PeerJoined` / `PeerLeft` |
 | `offer` / `answer` | `Offer(from, SdpPayload)` / `Answer(from, SdpPayload)` |
 | `ice-candidate` | `IceCandidate(from, IceCandidatePayload)` |
@@ -283,11 +314,14 @@ symmetric NAT.
 | VC-009 | Responsive tile grid + landscape | Non-overlapping cells, reflows on resize; rows of pairs, odd tile takes the full row |
 | VC-011 | Copy meeting code in-meeting | Tap the badge |
 | VC-016 | Active-speaker detection | RMS from remote audio tracks; speaker promoted into the grid |
+| VC-024 | **Adaptive encoder tuning** | Per-link bitrate ceiling + capture resolution re-derived from the live link count on every join/leave (§1). Ceilings only — congestion control keeps full authority over the send rate |
 | VC-017 | Pin a participant | Tap a tile or overflow chip |
 | VC-018 | Overflow strip | Participants beyond 9 grid tiles become avatar chips |
 | VC-020 | **Meeting UI moved into the SDK** | `MeshMeetingView` owns the screen; the app is lobby + permissions |
 | VC-019 | **Node.js signaling broker** | Implements §4 exactly; in-memory, single-process, Socket.IO v4. See `VideoSDKServer/server/` (separate repo) |
 | VC-022 | **Audio output routing** | Speaker / Bluetooth / wired / earpiece behind one control-bar button; `AudioRouteController` owns mode, focus and device changes. No Bluetooth permission needed |
+| VC-025 | **Meeting codes are validated** | A meeting exists only while somebody is in it: `check-meetings` gates the join dialog, `join-meeting` without `create` is refused with `meeting-not-found`, and Recent Meetings offers Rejoin only for codes the broker confirms are live. Needs the matching broker handlers (§4) |
+| VC-026 | **Display name** | Asked once on first launch, stored in `SharedPreferences`, sent as `userName` instead of `Build.MODEL`. Editable from the lobby's name chip |
 | VC-023 | **Screen share** | Replaces the camera on the existing sender via `setTrack` — no renegotiation, no new signaling. Foreground service (`mediaProjection`) + host-supplied consent Intent. Remote tiles crop it; see Partial |
 
 ### Partial
@@ -305,7 +339,7 @@ symmetric NAT.
 | VC-014 | Actionable error surfacing | High | Distinct dialogs: server unreachable (with retry), camera in use, mic denied |
 | VC-007 | In-meeting text chat | Medium | Signaling relay first, DataChannel later (additive event) |
 | VC-010 | Deep-link invitations | Medium | `videocall://join/<code>` prefills Join |
-| VC-008 | Video quality presets | Low | 360p / 480p / 720p without dropping the meeting |
+| VC-008 | Video quality presets | Low | The SDK already steps 720p → 540p → 480p automatically with the link count (§1); what is missing is a *user-facing* override for people who want to force one |
 | VC-013 | Recording | Low | Depends on VC-012 |
 | VC-015 | Auth / user profiles | Low | Persisted display name; stable `userId` across sessions |
 | VC-021 | SFU migration | Later | Only if meetings need to exceed ~6 participants (§1) |
@@ -393,6 +427,23 @@ Mandatory, not suggestions.
     peer-state. Meetings connected, exchanged nothing, and logged no error. Parsing a
     required field must **log on failure** — a silent `return` here is indistinguishable
     from a network problem and sends you hunting ICE, TURN, and camera code for hours.
+12. Matching video senders by **track identity** (`sender.track() === localVideoTrack`) instead
+    of by kind silently skips the screen-share track, because sharing swaps a different track
+    into the same sender. The bitrate cap then never applied while sharing — the one time the
+    stream is largest. Match on `kind() == "video"`.
+13. A per-link bitrate cap multiplies in a mesh. Capping each of N−1 senders at 1 Mbps asks the
+    uplink for N−1 Mbps; congestion control then backs every stream off unevenly and the whole
+    grid goes soft at once. Divide a total budget instead, and move capture resolution with it —
+    see §1.
+14. **Never seed the bandwidth estimate.** `PeerConnection.setBitrate(min, current, max)` does
+    not hint at a starting point — passing `current` *resets* the estimate, overriding what
+    congestion control measured. Seeding it (and raising the ceiling to match) made the encoder
+    demand more than the uplink could carry before it had measured anything: loss, a hard
+    back-off, a probe back up, repeat. Video was sharp or blocky depending on which phase of
+    the oscillation you caught, and 1:1 calls — where the ceiling was raised most — suffered
+    worst. Symptom to recognise: *"sometimes okay, sometimes worse"* rather than a steady
+    quality level. Set ceilings; let BWE find the rate. Raising a ceiling never adds quality a
+    link cannot carry — it only adds room to overshoot.
 
 ---
 
@@ -410,6 +461,11 @@ remote video visible · remote audio audible · mic toggle updates the remote ba
 toggle likewise · switch camera does not drop the meeting · tap a tile to pin · active
 speaker gets the ring · 3rd and 5th participants each take a full-width row and the grid
 shrinks to fit · leave removes the tile remotely · leaving frees resources with no leak.
+
+**Video quality** — `MeshCall/Engine` logs a `video tier for N link(s)` line on every join
+and leave · 2–4 participants stay at `1280x720 ≤1000kbps` · the tier climbs back up when
+peers drop · quality holds *steady* rather than alternating sharp and blocky (see pitfall
+14) · a shared screen stays legible at 5 people.
 
 **Robustness** — peer joins mid-meeting · peer leaves mid-meeting · network drop
 reconnects and resumes · re-joining the same meeting is a no-op · ICE failure re-links

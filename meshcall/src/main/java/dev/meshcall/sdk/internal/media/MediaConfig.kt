@@ -17,6 +17,7 @@ internal data class MediaConfig(
     val initialMicOn: Boolean = true,
     val initialCameraOn: Boolean = true,
     val maxVideoKbps: Int = 1000,
+    val uplinkBudgetKbps: Int = 3000,
     val iceServers: List<IceServerConfig> = MeshCallConfig.DEFAULT_ICE_SERVERS,
 ) {
     enum class CameraFacing { FRONT, BACK }
@@ -30,6 +31,7 @@ internal data class MediaConfig(
             initialMicOn = config.startWithMicOn,
             initialCameraOn = config.startWithCameraOn,
             maxVideoKbps = config.maxVideoKbps,
+            uplinkBudgetKbps = config.uplinkBudgetKbps,
             iceServers = config.iceServers,
         )
     }

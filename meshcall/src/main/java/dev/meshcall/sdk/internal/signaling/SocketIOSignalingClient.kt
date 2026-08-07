@@ -32,11 +32,23 @@ internal class SocketIOSignalingClient(
     @Volatile private var socket: Socket? = null
     private var currentMeetingId: String? = null
 
+    /** Whether this participant is entitled to open the meeting — see [rejoinAndSync]. */
+    @Volatile private var createIfMissing = false
+
+    /**
+     * Set once the broker has accepted us into the meeting. From then on every reconnect
+     * may re-create it: the meeting can only have gone away because *we* were the last
+     * one in it and got dropped, and that must not lock us out of our own call.
+     */
+    @Volatile private var established = false
+
     /** Messages produced while the socket was down, replayed in order on reconnect. */
     private val pending = ArrayDeque<Pair<String, JSONObject>>()
 
-    override suspend fun connect(meetingId: String) {
+    override suspend fun connect(meetingId: String, createIfMissing: Boolean) {
         currentMeetingId = meetingId
+        this.createIfMissing = createIfMissing
+        established = false
         // A fresh client is created per session, so disconnect() clears all handler state
         // and a previous socket is never reused here.
         val s = createSocket(url)
@@ -142,6 +154,9 @@ internal class SocketIOSignalingClient(
                     }
                 } ?: emptyList()
                 MeshLog.i(TAG) { "roster: ${peers.size} peer(s)" }
+                // The broker only sends a roster to a socket it accepted, so this is the
+                // point where we are provably in the meeting.
+                established = true
                 _events.tryEmit(
                     SignalEvent.MeetingSnapshot(
                         peers,
@@ -149,6 +164,17 @@ internal class SocketIOSignalingClient(
                     ),
                 )
             }
+        }
+        s.on(SignalingSchema.TYPE_MEETING_NOT_FOUND) { args ->
+            val meeting = args.firstOrNull()?.asJson()
+                ?.optString(SignalingSchema.KEY_MEETING)
+                ?.takeIf { it.isNotEmpty() }
+                ?: currentMeetingId.orEmpty()
+            MeshLog.w(TAG, "join refused: meeting $meeting does not exist")
+            // Nothing further will arrive on this socket, and socket.io would otherwise
+            // keep reconnecting and re-asking forever.
+            s.disconnect()
+            _events.tryEmit(SignalEvent.MeetingNotFound(meeting))
         }
         s.on(SignalingSchema.TYPE_ERROR) { args ->
             args.firstOrNull()?.asJson()?.let { j ->
@@ -168,6 +194,7 @@ internal class SocketIOSignalingClient(
                 put(SignalingSchema.KEY_MEETING, meeting)
                 put(SignalingSchema.KEY_USER_ID, userId)
                 put(SignalingSchema.KEY_USER_NAME, userName)
+                put(SignalingSchema.KEY_CREATE, createIfMissing || established)
             },
         )
     }

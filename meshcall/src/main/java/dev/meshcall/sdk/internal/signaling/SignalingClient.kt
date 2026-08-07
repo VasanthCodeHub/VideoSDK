@@ -15,8 +15,15 @@ import kotlinx.coroutines.flow.Flow
  */
 internal interface SignalingClient {
 
-    /** Connect to the broker and join [meetingId] under our own identity. */
-    suspend fun connect(meetingId: String)
+    /**
+     * Connect to the broker and join [meetingId] under our own identity.
+     *
+     * @param createIfMissing open the meeting when the broker has no record of it. Only
+     *   the participant who started the meeting may do this; everyone else must be
+     *   refused with [SignalEvent.MeetingNotFound] rather than silently landing in an
+     *   empty meeting of their own making.
+     */
+    suspend fun connect(meetingId: String, createIfMissing: Boolean = false)
 
     /**
      * Push a message. [targetPeerId] is null for meeting-wide broadcasts. [payload] is a
@@ -70,6 +77,12 @@ internal sealed class SignalEvent {
         val peers: List<SignalingSchema.MeetingPeerInfo>,
         val meetingId: String?,
     ) : SignalEvent()
+
+    /**
+     * The broker refused the join: no meeting with that code is live. Terminal for this
+     * session — nothing else will arrive, so the host should leave and say so.
+     */
+    data class MeetingNotFound(val meetingId: String) : SignalEvent()
 
     /** The transport is healthy but the broker reported a fault. */
     data class ErrorReceived(val message: String) : SignalEvent()

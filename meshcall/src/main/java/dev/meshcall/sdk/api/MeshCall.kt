@@ -56,22 +56,30 @@ class MeshCall(context: Context) {
     /**
      * Join a meeting.
      *
+     * A meeting exists only while somebody is in it. Joining a code nobody is in is
+     * **refused** — watch [meetingNotFound] and leave the screen — unless
+     * [createIfMissing] is set, which is how the participant who started the meeting
+     * brings it into existence. Validate a code before you get here with
+     * [MeshMeetingDirectory].
+     *
      * @param brokerUrl   signaling endpoint, e.g. `wss://signaling.example.com`
      * @param meetingId   identifier shared by every participant
      * @param displayName human-readable name broadcast to the others
      * @param config      capture, bitrate, and ICE (STUN/TURN) settings
+     * @param createIfMissing open the meeting if the broker has no record of it
      */
     fun join(
         brokerUrl: String,
         meetingId: String,
         displayName: String,
         config: MeshCallConfig = MeshCallConfig(),
+        createIfMissing: Boolean = false,
     ) {
         leave()
         val manager = MeshMeetingManager(appContext, brokerUrl, userId, displayName)
         managerFlow.value = manager
         currentMeetingId = meetingId
-        manager.join(meetingId, MediaConfig.from(config))
+        manager.join(meetingId, MediaConfig.from(config), createIfMissing)
     }
 
     // ---- Observable state -------------------------------------------------------
@@ -134,6 +142,15 @@ class MeshCall(context: Context) {
     /** True while this device is sharing its screen instead of its camera. */
     val screenSharing: Flow<Boolean> = managerFlow.flatMapLatest { manager ->
         manager?.screenSharing ?: flowOf(false)
+    }
+
+    /**
+     * Emits the meeting id when the broker refuses the join: no meeting with that code is
+     * live. Fatal for the session — nothing else will arrive — so the host should tell the
+     * user and navigate away rather than leaving them in an empty grid.
+     */
+    val meetingNotFound: Flow<String> = managerFlow.flatMapLatest { manager ->
+        manager?.meetingNotFound ?: emptyFlow()
     }
 
     /** Non-fatal errors worth surfacing (signaling drops, media failures). */

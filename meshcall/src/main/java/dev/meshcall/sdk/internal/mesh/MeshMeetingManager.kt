@@ -125,9 +125,19 @@ internal class MeshMeetingManager(
     private var localVideoTrack: VideoTrack? = null
 
     /**
-     * Join [meetingId]. Idempotent: re-joining the meeting already in progress is a no-op.
+     * Emits the meeting id when the broker refuses the join because no such meeting is
+     * live. Terminal: nothing else follows, and the host is expected to leave the screen.
      */
-    fun join(meetingId: String, config: MediaConfig) {
+    private val _meetingNotFound = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 4)
+    val meetingNotFound = _meetingNotFound.asSharedFlow()
+
+    /**
+     * Join [meetingId]. Idempotent: re-joining the meeting already in progress is a no-op.
+     *
+     * [createIfMissing] is for the participant who started the meeting. Everyone else
+     * joins without it and is refused when the code is not live — see [meetingNotFound].
+     */
+    fun join(meetingId: String, config: MediaConfig, createIfMissing: Boolean = false) {
         val current = _session.value
         if (current is Session.Active && current.meetingId == meetingId) return
         leave()
@@ -205,7 +215,7 @@ internal class MeshMeetingManager(
             signalingJob?.cancel()
             signalingJob = launch { client.events.collect(::onSignalEvent) }
 
-            client.connect(meetingId)
+            client.connect(meetingId, createIfMissing)
         }
 
         startSpeakerSampler()
@@ -311,6 +321,12 @@ internal class MeshMeetingManager(
                 _signalingConnected.value = false
                 // socket.io reconnects on its own; the reconnect path re-emits
                 // join-meeting, which brings back a fresh roster snapshot.
+            }
+
+            is SignalEvent.MeetingNotFound -> {
+                MeshLog.w(TAG, "meeting ${event.meetingId} does not exist — leaving")
+                _signalingConnected.value = false
+                _meetingNotFound.tryEmit(event.meetingId)
             }
 
             is SignalEvent.ErrorReceived -> _errors.tryEmit(event.message)

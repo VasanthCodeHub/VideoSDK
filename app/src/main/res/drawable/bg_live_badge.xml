@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "LIVE" pill on a recent meeting that still has people in it. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#33EF4444" />
+    <corners android:radius="24dp" />
+</shape>

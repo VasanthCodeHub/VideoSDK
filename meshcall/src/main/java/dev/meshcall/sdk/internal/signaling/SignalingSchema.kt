@@ -13,7 +13,8 @@ import org.json.JSONObject
  * `{type, payload}` envelope; the event name is the type.
  *
  * Client → server:
- *   join-meeting   { meeting, userId, userName }
+ *   join-meeting   { meeting, userId, userName, create }
+ *   check-meetings { meetings: [ code ] }                          // Socket.IO ack reply
  *   offer          { to, sdp: { type, sdp } }
  *   answer         { to, sdp: { type, sdp } }
  *   ice-candidate  { to, candidate: { candidate, sdpMLineIndex, sdpMid } }
@@ -21,14 +22,23 @@ import org.json.JSONObject
  *   mute-request   { to }
  *
  * Server → client (the broker always injects `from`):
- *   meeting-members { meeting, peers: [ { userId, userName } ] }
- *   peer-joined     { userId, userName, meeting }
- *   peer-left       { peerId }
- *   offer / answer  { from, sdp: {...} }
- *   ice-candidate   { from, candidate: {...} }
- *   peer-state      { from, state: {...} }
- *   mute-request    { from }
- *   error           { error }
+ *   meeting-members   { meeting, peers: [ { userId, userName } ] }
+ *   meeting-not-found { meeting }
+ *   peer-joined       { userId, userName, meeting }
+ *   peer-left         { peerId }
+ *   offer / answer    { from, sdp: {...} }
+ *   ice-candidate     { from, candidate: {...} }
+ *   peer-state        { from, state: {...} }
+ *   mute-request      { from }
+ *   error             { error }
+ *
+ * **A meeting exists only while at least one participant is in it.** The broker keeps no
+ * meeting records, so `check-meetings` answers with a live participant count per code
+ * (`{ meetings: [ { meeting, participants } ] }`, 0 meaning "not live"), and `join-meeting`
+ * is refused with `meeting-not-found` unless the meeting already exists or `create` is
+ * true. `create` belongs to the participant who started the meeting — and to anyone
+ * already established in it whose socket reconnects, since a meeting that emptied while
+ * its last participant was dropped must still be re-enterable by them.
  *
  * `mute-request` is a client-only contract today: the broker in `VideoSDKServer/server`
  * does not yet relay it, so [SocketIOSignalingClient] emits/listens for it but no
@@ -51,8 +61,13 @@ internal object SignalingSchema {
     const val KEY_STATE = "state"
     const val KEY_PEER_ID = "peerId"
     const val KEY_PEERS = "peers"
+    const val KEY_CREATE = "create"
+    const val KEY_MEETINGS = "meetings"
+    const val KEY_PARTICIPANTS = "participants"
 
     const val TYPE_JOIN_MEETING = "join-meeting"
+    const val TYPE_CHECK_MEETINGS = "check-meetings"
+    const val TYPE_MEETING_NOT_FOUND = "meeting-not-found"
     const val TYPE_MEETING_MEMBERS = "meeting-members"
     const val TYPE_PEER_JOINED = "peer-joined"
     const val TYPE_PEER_LEFT = "peer-left"
