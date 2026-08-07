@@ -70,6 +70,9 @@ internal class MeshMeetingManager(
     /** Last known media state per peer, so roster rebuilds don't drop "muted" indicators. */
     private val remoteMedia = HashMap<String, Pair<Boolean, Boolean>>()
 
+    /** Who is presenting a screen. Absent means "not sharing" — see [PeerStatePayload]. */
+    private val remoteSharing = HashMap<String, Boolean>()
+
     /** Latest ICE label per peer, surfaced as each tile's connection dot. */
     private val iceStateByPeer = HashMap<String, String>()
 
@@ -195,16 +198,7 @@ internal class MeshMeetingManager(
                     when (event) {
                         is MeshWebRtcEngine.ConnectionEvent.LocalMediaStateChanged -> {
                             _localMedia.value = LocalMediaState(event.micOn, event.camOn)
-                            // Nested under `state` — see [sendSdp].
-                            client.sendMessage(
-                                SignalingSchema.TYPE_PEER_STATE,
-                                null,
-                                JSONObject().put(
-                                    SignalingSchema.KEY_STATE,
-                                    SignalingSchema.PeerStatePayload(event.micOn, event.camOn)
-                                        .toJson(),
-                                ).toString(),
-                            )
+                            broadcastLocalState()
                         }
 
                         is MeshWebRtcEngine.ConnectionEvent.LocalError ->
@@ -224,6 +218,9 @@ internal class MeshMeetingManager(
                             // stopped from the event rather than only from stopScreenShare().
                             if (!event.active) MeshScreenShareService.stop(appContext)
                             publishLocalVideo()
+                            // The track swap is invisible on the wire — the peers only
+                            // learn this is a screen because of this broadcast.
+                            broadcastLocalState()
                         }
                     }
                 }
@@ -255,6 +252,8 @@ internal class MeshMeetingManager(
                 remoteNames[event.peerId] = event.userName
                 remoteAvatars[event.peerId] = event.avatarBase64
                 ensureLinkTo(event.peerId)
+                // They know nothing about us yet — see [broadcastLocalState].
+                broadcastLocalState(to = event.peerId)
                 publishPeers()
             }
 
@@ -338,6 +337,7 @@ internal class MeshMeetingManager(
                 remoteNames.getOrPut(event.fromId) { event.fromId }
                 remoteMedia[event.fromId] =
                     event.state.micEnabled to event.state.cameraEnabled
+                remoteSharing[event.fromId] = event.state.sharing
                 publishPeers()
             }
 
@@ -478,6 +478,7 @@ internal class MeshMeetingManager(
         remoteNames.remove(peerId)
         remoteAvatars.remove(peerId)
         remoteMedia.remove(peerId)
+        remoteSharing.remove(peerId)
         iceStateByPeer.remove(peerId)
         relinkAttempts.remove(peerId)
         if (_speakerId.value == peerId) _speakerId.value = null
@@ -497,6 +498,33 @@ internal class MeshMeetingManager(
         scope.launch { signaling?.sendMessage(type, peerId, payload.toString()) }
     }
 
+    /**
+     * Announce our mic / camera / sharing state. Broadcast when [to] is null, otherwise
+     * aimed at one peer.
+     *
+     * Sent on every change *and* at every [SignalEvent.PeerJoined]. The targeted form is
+     * what makes a mid-meeting joiner correct: state only ever travelled on change before,
+     * so whoever arrived late saw defaults — everyone unmuted, cameras on, nobody
+     * presenting — until each peer happened to toggle something. Re-announcing to the
+     * newcomer costs one small message and removes that whole class of stale-tile bug.
+     */
+    private fun broadcastLocalState(to: String? = null) {
+        val client = signaling ?: return
+        val media = _localMedia.value
+        // Nested under `state` — see [sendSdp].
+        val payload = JSONObject().put(
+            SignalingSchema.KEY_STATE,
+            SignalingSchema.PeerStatePayload(
+                micEnabled = media.micEnabled,
+                cameraEnabled = media.cameraEnabled,
+                sharing = _screenSharing.value,
+            ).toJson(),
+        )
+        scope.launch {
+            client.sendMessage(SignalingSchema.TYPE_PEER_STATE, to, payload.toString())
+        }
+    }
+
     private fun publishPeers() {
         _peers.value = remoteNames.mapNotNull { (id, name) ->
             if (id == userId || id !in connections) return@mapNotNull null
@@ -508,6 +536,7 @@ internal class MeshMeetingManager(
                 cameraEnabled = cam,
                 connectionState = iceStateByPeer[id] ?: "new",
                 avatarBase64 = remoteAvatars[id],
+                isSharing = remoteSharing[id] == true,
             )
         }
     }
@@ -680,6 +709,7 @@ internal class MeshMeetingManager(
         remoteNames.clear()
         remoteAvatars.clear()
         remoteMedia.clear()
+        remoteSharing.clear()
         iceStateByPeer.clear()
         relinkAttempts.clear()
         _signalingConnected.value = false
@@ -722,6 +752,7 @@ internal class MeshMeetingManager(
         val cameraEnabled: Boolean,
         val connectionState: String = "new",
         val avatarBase64: String? = null,
+        val isSharing: Boolean = false,
     )
 
     /** Media/track lifecycle event surfaced to the view layer. */

@@ -81,9 +81,8 @@ class MainActivity : AppCompatActivity() {
         fitTopSafeArea()
 
         binding.meetingView.onLeave = { saveMeetingHistory(); finish() }
-        // onMoreOptions is left unset so the SDK's own "more" sheet is used; share is one
-        // of its entries and stays a host callback because MediaProjection consent has to
-        // be requested from an Activity.
+        // Share stays a host callback because MediaProjection consent has to be requested
+        // from an Activity; the SDK owns the button and the stop path.
         binding.meetingView.onShareScreen = {
             screenShareLauncher.launch(MeshCall.screenCaptureIntent(this))
         }

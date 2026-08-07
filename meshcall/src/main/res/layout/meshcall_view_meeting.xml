@@ -343,13 +343,17 @@
     <!-- Control bar -->
     <LinearLayout
         android:id="@+id/meshcall_controls"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="@color/meshcall_chrome_background"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="16dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/meshcall_bg_controls_bar"
         android:gravity="center"
         android:orientation="horizontal"
-        android:paddingHorizontal="8dp"
-        android:paddingVertical="14dp">
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="12dp">
 
         <!--
           Six controls at 56dp would need 404dp of width and clip on a 360dp phone, so the
@@ -379,7 +383,7 @@
         <!--
           Speaker, Bluetooth, wired and earpiece are one decision — which device the call
           is on — so they are one button that opens a picker, not four toggles that can
-          contradict each other. Screen share moved into the "more" sheet.
+          contradict each other.
         -->
         <ImageButton
             android:id="@+id/meshcall_btn_audio_route"
@@ -409,16 +413,21 @@
             android:scaleType="fitCenter"
             android:src="@drawable/meshcall_ic_camera_front" />
 
+        <!--
+          Screen share is a first-class control, not a menu entry: it is a single toggle
+          with a visible on/off state, which is exactly what the bar is for. The button
+          turns active while sharing and stopping is one tap on the same button.
+        -->
         <ImageButton
-            android:id="@+id/meshcall_btn_more"
+            android:id="@+id/meshcall_btn_share"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
             android:background="@drawable/meshcall_bg_control"
-            android:contentDescription="@string/meshcall_desc_more"
+            android:contentDescription="@string/meshcall_desc_share"
             android:padding="13dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/meshcall_ic_more" />
+            android:src="@drawable/meshcall_ic_present_to_all" />
 
         <ImageButton
             android:id="@+id/meshcall_btn_leave"

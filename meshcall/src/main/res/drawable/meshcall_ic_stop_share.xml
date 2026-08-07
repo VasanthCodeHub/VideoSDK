@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Stop sharing: the universal media "stop" square, shown in place of
+  meshcall_ic_present_to_all while a share is running.
+
+  A square rather than a slashed-screen glyph on purpose — at the 22dp the control bar
+  renders icons at, a diagonal slash over screen detail turns into noise, while a solid
+  block reads as "stop" instantly and at any size. Filled, not stroked, so it carries the
+  same visual weight as the PNG icon it replaces.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7,6h10c0.55,0 1,0.45 1,1v10c0,0.55 -0.45,1 -1,1H7c-0.55,0 -1,-0.45 -1,-1V7c0,-0.55 0.45,-1 1,-1z" />
+</vector>

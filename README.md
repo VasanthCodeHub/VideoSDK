@@ -103,7 +103,7 @@ inflates under any host theme.
 | `MeshCall` flows | `participants`, `speaker`, `connected`, `localMedia`, `state`, `errors`, `meetingNotFound` — stable across joins; safe to collect before or after `join` |
 | `MeshMeetingDirectory` | `isLive(brokerUrl, code)` / `status(brokerUrl, codes)` — is that meeting joinable? Returns **null** when the broker is unreachable, which is not the same answer as "no" |
 | Private meetings | `join(..., isPrivate = true)` opens one; `admission` says whether you're in, waiting or refused; `joinRequests` + `admitParticipant`/`declineParticipant` are the host's door. `MeshMeetingView` renders both sides |
-| `MeshMeetingView` | The complete meeting screen. `attach(call, meetingId, showConnectionBanner)`, `detach()`, `leaveNow()`, callbacks `onLeave` / `onShareScreen` / `onMoreOptions`, flag `confirmBeforeLeaving` |
+| `MeshMeetingView` | The complete meeting screen. `attach(call, meetingId, showConnectionBanner)`, `detach()`, `leaveNow()`, callbacks `onLeave` / `onShareScreen`, flag `confirmBeforeLeaving` |
 | `MeshParticipantGrid` | Just the tile grid, for building a custom meeting screen. `bind`/`unbind`/`release`, `setPinned`, `setSpeaker`, `setLocalMediaState`, `onPinRequest` |
 | `MeshVideoRenderer` | `SurfaceViewRenderer` subclass, inflatable from XML |
 | `MeshCallConfig` | Capture ceiling (resolution, frame rate), per-link `maxVideoKbps` + total `uplinkBudgetKbps`, initial mic/camera, **ICE servers (STUN/TURN)** |
@@ -207,7 +207,7 @@ run on a dedicated single-thread executor.
 | `offer` | `{ to, sdp: { type: "offer", sdp } }` | Relay to `to`, inject `from`. |
 | `answer` | `{ to, sdp: { type: "answer", sdp } }` | Relay to `to`, inject `from`. |
 | `ice-candidate` | `{ to, candidate: { candidate, sdpMLineIndex, sdpMid } }` | Relay to `to`, inject `from`. |
-| `peer-state` | `{ state: { micEnabled, cameraEnabled } }` | `to` optional; absent = broadcast. |
+| `peer-state` | `{ state: { micEnabled, cameraEnabled, sharing } }` | `to` optional; absent = broadcast. Also sent **targeted at each newly joined peer**, so a late joiner does not sit on defaults until someone toggles something. `sharing` is the only way a receiver can tell a screen share from a camera — the share swaps into the same transceiver, so the track itself looks identical. |
 
 ### Server → Client
 
@@ -340,14 +340,13 @@ symmetric NAT.
 | VC-027 | **Private meetings** | Switch at creation time. Every later joiner knocks: broker parks them out of the roster, host gets an admit/decline card at the top of the meeting, joiner sees a waiting room. Broker-enforced, keyed by `userId`, host role and pending queue survive the host leaving (§4). Recent Meetings marks a live private meeting with a lock badge |
 | VC-025 | **Meeting codes are validated** | A meeting exists only while somebody is in it: `check-meetings` gates the join dialog, `join-meeting` without `create` is refused with `meeting-not-found`, and Recent Meetings offers Rejoin only for codes the broker confirms are live. Needs the matching broker handlers (§4) |
 | VC-026 | **Display name** | Asked once on first launch, stored in `SharedPreferences`, sent as `userName` instead of `Build.MODEL`. Editable from the lobby's name chip |
-| VC-023 | **Screen share** | Replaces the camera on the existing sender via `setTrack` — no renegotiation, no new signaling. Foreground service (`mediaProjection`) + host-supplied consent Intent. Remote tiles crop it; see Partial |
+| VC-023 | **Screen share** | Replaces the camera on the existing sender via `setTrack` — no renegotiation. Foreground service (`mediaProjection`) + host-supplied consent Intent. A `sharing` flag on `peer-state` tells receivers the track is a screen, which promotes the sharer to a **full-screen presenter**: their tile takes the whole grid at `SCALE_ASPECT_FIT`, every other tile and the overflow strip are hidden, and the top bar and controls auto-hide after 3s (tap to bring them back). The sharer's own view is unchanged — promoting it would recurse the capture into itself |
 
 ### Partial
 
 | ID | Feature | Remaining |
 |----|---------|-----------|
 | VC-004 | Connection status indicator | Per-peer ICE dots + broker banner ship; **peer disconnect/reconnect toast** pending |
-| VC-023 | Screen share | Works end to end, but **receivers do not know a tile is a screen**: their renderer stays on `SCALE_ASPECT_FILL` and crops it. Fix needs a `sharing` flag on `peer-state` (broker change, separate repo) so remote tiles can switch to `SCALE_ASPECT_FIT` — the sharer's own tile already does |
 
 ### Not started
 

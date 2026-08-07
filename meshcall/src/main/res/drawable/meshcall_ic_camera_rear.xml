@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Rear camera in use: the same device body with a bare lens instead of a person. See
-  meshcall_ic_camera_front for the counterpart.
+  Rear camera in use: the device body with a single large lens knocked out of its centre.
+
+  The stock Material glyph puts a 2dp lens near the top, which at the 22dp this actually
+  renders at is all but identical to meshcall_ic_camera_front's head-and-shoulders — the
+  two states were technically different and visually the same. The lens is deliberately
+  oversized and centred so the pair reads apart at a glance.
+
+  The lens is a *hole*, not a drawn circle: the body subpath fills solid, so a white circle
+  painted over it would be invisible. fillType="evenOdd" makes the knockout independent of
+  subpath winding direction, which is what the stock icon relied on.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
@@ -11,5 +19,6 @@
     android:tint="#FFFFFFFF">
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M10,20H2v2h8v2l3,-3 -3,-3v2zM17,0H7C5.9,0 5,0.9 5,2v14c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V2c0,-1.1 -0.9,-2 -2,-2zM12,6c-1.11,0 -2,-0.9 -2,-2s0.89,-2 2,-2c1.1,0 2,0.9 2,2s-0.9,2 -2,2zM14,20v2h8v-2h-8z" />
+        android:fillType="evenOdd"
+        android:pathData="M10,20H2v2h8v2l3,-3 -3,-3v2zM17,0H7C5.9,0 5,0.9 5,2v14c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V2c0,-1.1 -0.9,-2 -2,-2zM12,9m-3.2,0a3.2,3.2 0,1 1,6.4 0a3.2,3.2 0,1 1,-6.4 0zM14,20v2h8v-2h-8z" />
 </vector>

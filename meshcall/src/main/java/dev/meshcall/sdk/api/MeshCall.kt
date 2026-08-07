@@ -119,6 +119,7 @@ class MeshCall(context: Context) {
                     cameraEnabled = it.cameraEnabled,
                     connectionState = it.connectionState,
                     avatarBase64 = it.avatarBase64,
+                    isSharing = it.isSharing,
                 )
             }
         } ?: flowOf(emptyList())
@@ -288,6 +289,13 @@ data class MeshParticipant(
     val connectionState: String = "new",
     /** Base64 JPEG thumbnail this participant joined with, or null if they chose none. */
     val avatarBase64: String? = null,
+    /**
+     * True while this participant is sharing their screen — their video track carries the
+     * screen instead of their camera. [MeshMeetingView] promotes them to a full-screen
+     * presenter; a custom meeting screen should at minimum letterbox rather than crop
+     * their video, and skip the camera-off placeholder.
+     */
+    val isSharing: Boolean = false,
 )
 
 /** High-level session status. */

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Rounded backdrop for the meeting control bar.
+
+  The bar carries a margin on every side rather than sitting flush at the bottom, so the
+  radius is actually visible — a full-bleed bar would run its corners into the screen edge
+  and read as square. Those margins eat into a width budget that is already tight; see the
+  arithmetic on meshcall_controls before changing them.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/meshcall_avatar_background" />
+    <corners android:radius="32dp" />
+</shape>

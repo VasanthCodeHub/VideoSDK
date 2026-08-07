@@ -30,7 +30,6 @@
     <string name="meshcall_desc_switch_to_front">Rear camera in use, switch to front</string>
     <string name="meshcall_desc_participants">Participants</string>
     <string name="meshcall_desc_share">Share screen</string>
-    <string name="meshcall_desc_more">More options</string>
     <string name="meshcall_desc_leave">Leave meeting</string>
 
     <!-- Private meetings -->
@@ -53,10 +52,8 @@
     <string name="meshcall_stop_sharing">Stop sharing</string>
     <string name="meshcall_you_are_sharing">You are sharing your screen</string>
     <string name="meshcall_share_failed">Screen sharing could not start</string>
-
-    <!-- More options sheet -->
-    <string name="meshcall_more_title">More</string>
-    <string name="meshcall_more_empty">No additional options</string>
+    <string name="meshcall_peer_presenting">%1$s is presenting</string>
+    <string name="meshcall_share_unavailable">Screen sharing is not available here</string>
 
     <!-- Audio output picker -->
     <string name="meshcall_desc_audio_route">Audio output</string>

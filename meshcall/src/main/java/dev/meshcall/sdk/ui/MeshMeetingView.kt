@@ -82,7 +82,7 @@ class MeshMeetingView @JvmOverloads constructor(
     private val micButton: ImageButton
     private val cameraButton: ImageButton
     private val audioRouteButton: ImageButton
-    private val moreButton: ImageButton
+    private val shareButton: ImageButton
     private val leaveButton: ImageButton
     private val participantsButton: ImageButton
     private val switchCameraButton: ImageButton
@@ -118,26 +118,21 @@ class MeshMeetingView @JvmOverloads constructor(
     /** Mirrors [MeshCall.screenSharing]; decides whether "more" offers start or stop. */
     private var screenSharing = false
 
+    /** Remote participant currently presenting, or null. Their tile takes the whole grid. */
+    private var presenterId: String? = null
+
     /** Invoked after the user confirms leaving. Navigate away here. */
     var onLeave: (() -> Unit)? = null
 
     /**
-     * Invoked when "share screen" is tapped. Null hides the entry.
+     * Invoked when the share button is tapped to *start* sharing.
      *
-     * Screen share lives in the "more" sheet, not the control bar: MediaProjection consent
-     * is an Activity-scoped flow the host has to run, so it is a host decision, and the bar
-     * is reserved for the controls used every meeting.
+     * Required for sharing to be offered at all: MediaProjection consent is an
+     * Activity-scoped flow only the host can run, so the SDK cannot begin a share on its
+     * own. Leave it null and the button says so when tapped. Stopping is handled internally
+     * and needs nothing from the host.
      */
     var onShareScreen: (() -> Unit)? = null
-
-    /**
-     * Replace the built-in "more" sheet with the host's own menu.
-     *
-     * Left null — the recommended setup — "more" opens the SDK's sheet with screen share
-     * and the other secondary actions in it. Set this only when the host needs entries the
-     * SDK knows nothing about; it then owns the whole menu, including re-offering share.
-     */
-    var onMoreOptions: (() -> Unit)? = null
 
     /**
      * Ask before leaving. Leave it on unless the host runs its own confirmation and calls
@@ -161,7 +156,7 @@ class MeshMeetingView @JvmOverloads constructor(
         micButton = findViewById(R.id.meshcall_btn_mic)
         cameraButton = findViewById(R.id.meshcall_btn_camera)
         audioRouteButton = findViewById(R.id.meshcall_btn_audio_route)
-        moreButton = findViewById(R.id.meshcall_btn_more)
+        shareButton = findViewById(R.id.meshcall_btn_share)
         leaveButton = findViewById(R.id.meshcall_btn_leave)
         participantsButton = findViewById(R.id.meshcall_btn_participants)
         switchCameraButton = findViewById(R.id.meshcall_btn_switch_camera)
@@ -184,10 +179,7 @@ class MeshMeetingView @JvmOverloads constructor(
         cameraButton.setOnClickListener { call?.toggleCamera() }
         switchCameraButton.setOnClickListener { call?.switchCamera() }
         audioRouteButton.setOnClickListener { showAudioRoutePicker() }
-        moreButton.setOnClickListener {
-            val hostMenu = onMoreOptions
-            if (hostMenu != null) hostMenu() else showMoreSheet()
-        }
+        shareButton.setOnClickListener { toggleScreenShare() }
         participantsButton.setOnClickListener {
             participantsPanel.visibility =
                 if (participantsPanel.visibility == VISIBLE) GONE else VISIBLE
@@ -223,7 +215,14 @@ class MeshMeetingView @JvmOverloads constructor(
 
         val participantGrid = MeshParticipantGrid(context, gridContainer, overflowStrip)
         participantGrid.onPinRequest = { peerId ->
-            participantGrid.setPinned(if (participantGrid.pinnedPeerId == peerId) null else peerId)
+            // Ignored while a presentation owns the grid: the presenter's is the only tile
+            // on screen, so pinning it would change nothing visible now and would leave a
+            // surprise pin behind once the share ends.
+            if (presenterId == null) {
+                participantGrid.setPinned(
+                    if (participantGrid.pinnedPeerId == peerId) null else peerId,
+                )
+            }
         }
         participantGrid.bind(call)
         grid = participantGrid
@@ -231,7 +230,12 @@ class MeshMeetingView @JvmOverloads constructor(
         val viewScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope = viewScope
 
-        viewScope.launch { call.participants.collect(::renderParticipants) }
+        viewScope.launch {
+            call.participants.collect { roster ->
+                renderParticipants(roster)
+                updatePresenter(roster)
+            }
+        }
         viewScope.launch { call.speaker.collect(participantGrid::setSpeaker) }
         viewScope.launch {
             call.localMedia.collect { state ->
@@ -243,12 +247,7 @@ class MeshMeetingView @JvmOverloads constructor(
         viewScope.launch {
             call.screenSharing.collect { sharing ->
                 screenSharing = sharing
-                // The "more" button carries the only stop control, so it has to advertise
-                // that something is running behind it.
-                moreButton.setBackgroundResource(
-                    if (sharing) R.drawable.meshcall_bg_control_active
-                    else R.drawable.meshcall_bg_control,
-                )
+                applyShareButton(sharing)
             }
         }
         viewScope.launch { call.frontCameraActive.collect(::applySwitchCameraButton) }
@@ -318,6 +317,7 @@ class MeshMeetingView @JvmOverloads constructor(
         participantsPanel.visibility = GONE
         joinRequests = emptyList()
         joinRequestCard.visibility = GONE
+        presenterId = null
         hideOverlay()
     }
 
@@ -399,36 +399,23 @@ class MeshMeetingView @JvmOverloads constructor(
     }
 
     /**
-     * The secondary-actions sheet behind "more". Entries appear only when they are actually
-     * usable — screen share needs a host that can run the MediaProjection consent flow — so
-     * the sheet never offers something that does nothing when tapped.
+     * Start or stop sharing, depending on which we are doing now.
+     *
+     * Stopping never needs the host: only *starting* requires the MediaProjection consent
+     * Intent, which an Activity has to request. So an active share can always be ended from
+     * here even when the host supplied no way to begin one.
      */
-    private fun showMoreSheet() {
-        val call = call
-        val share = onShareScreen
-        // Stopping needs no host involvement, so an active share is always offered an exit
-        // even when the host never supplied a way to start one.
-        if (share == null && !screenSharing) {
-            Toast.makeText(context, R.string.meshcall_more_empty, Toast.LENGTH_SHORT).show()
+    private fun toggleScreenShare() {
+        if (screenSharing) {
+            call?.stopScreenShare()
             return
         }
-
-        MeshBottomSheet(context).apply {
-            addTitle(R.string.meshcall_more_title)
-            if (screenSharing) {
-                addRow(
-                    iconRes = R.drawable.meshcall_ic_present_to_all,
-                    labelRes = R.string.meshcall_stop_sharing,
-                    selected = true,
-                ) { call?.stopScreenShare() }
-            } else if (share != null) {
-                addRow(
-                    iconRes = R.drawable.meshcall_ic_present_to_all,
-                    labelRes = R.string.meshcall_desc_share,
-                    onClick = share,
-                )
-            }
-        }.show()
+        val share = onShareScreen
+        if (share == null) {
+            Toast.makeText(context, R.string.meshcall_share_unavailable, Toast.LENGTH_SHORT).show()
+            return
+        }
+        share()
     }
 
     private fun applyMicButton(micOn: Boolean) {
@@ -457,6 +444,26 @@ class MeshMeetingView @JvmOverloads constructor(
      * buttons beside it; showing the destination instead would make the bar contradict
      * itself the moment someone reads it as a status row.
      */
+    /**
+     * The share button swaps its glyph, not just its background colour: the bar is read at
+     * a glance, and "same icon, slightly different background" is easy to miss and invisible
+     * to anyone who cannot separate the two colours. A stop square says stop on its own.
+     */
+    private fun applyShareButton(sharing: Boolean) {
+        shareButton.setImageResource(
+            if (sharing) R.drawable.meshcall_ic_stop_share
+            else R.drawable.meshcall_ic_present_to_all,
+        )
+        shareButton.setBackgroundResource(
+            if (sharing) R.drawable.meshcall_bg_control_active
+            else R.drawable.meshcall_bg_control,
+        )
+        shareButton.contentDescription = context.getString(
+            if (sharing) R.string.meshcall_stop_sharing else R.string.meshcall_desc_share,
+        )
+        shareButton.imageTintList = ColorStateList.valueOf(color(R.color.meshcall_white))
+    }
+
     private fun applySwitchCameraButton(frontActive: Boolean) {
         switchCameraButton.setImageResource(
             if (frontActive) R.drawable.meshcall_ic_camera_front
@@ -493,6 +500,27 @@ class MeshMeetingView @JvmOverloads constructor(
     private fun hideOverlay() {
         waitingOverlay.visibility = GONE
         overlayLeaveButton.visibility = GONE
+    }
+
+    // ---- Presentation (immersive) mode -------------------------------------------------
+
+    /**
+     * Promote whoever is sharing to a full-screen presenter, and step back down when they
+     * stop.
+     *
+     * First sharer in roster order wins if two people somehow share at once — the mesh has
+     * no host role to arbitrate, and a stage that swaps mid-sentence is worse than an
+     * arbitrary but stable choice. Our own share is deliberately not eligible; see
+     * [MeshParticipantGrid.setPresenter].
+     */
+    private fun updatePresenter(roster: List<MeshParticipant>) {
+        val next = roster.firstOrNull { it.isSharing }?.id
+        if (next == presenterId) return
+        presenterId = next
+        grid?.setPresenter(next)
+        // Otherwise the panel is a list of names sitting on top of the presentation, and
+        // the share does not in fact get the whole space.
+        if (next != null) participantsPanel.visibility = GONE
     }
 
     /**

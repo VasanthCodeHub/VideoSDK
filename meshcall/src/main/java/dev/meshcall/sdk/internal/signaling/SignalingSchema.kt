@@ -19,7 +19,7 @@ import org.json.JSONObject
  *   offer          { to, sdp: { type, sdp } }
  *   answer         { to, sdp: { type, sdp } }
  *   ice-candidate  { to, candidate: { candidate, sdpMLineIndex, sdpMid } }
- *   peer-state     { state: { micEnabled, cameraEnabled } }        // `to` optional
+ *   peer-state     { state: { micEnabled, cameraEnabled, sharing } } // `to` optional
  *   mute-request   { to }
  *
  * Server → client (the broker always injects `from`):
@@ -166,14 +166,25 @@ internal object SignalingSchema {
         }
     }
 
-    /** Broadcast media state so remote UIs can show "muted" indicators. */
+    /**
+     * Broadcast media state so remote UIs can show "muted" indicators and know who is
+     * presenting.
+     *
+     * [sharing] is the *only* way a receiver can tell a screen share from a camera: the
+     * share swaps into the same video transceiver (see `MeshWebRtcEngine.swapOutgoingVideo`)
+     * precisely so no renegotiation is needed, which means the incoming track looks
+     * identical either way. Without this flag a remote screen is cropped to fill a tile and
+     * a presenter with their camera off renders as an initials placeholder.
+     */
     data class PeerStatePayload(
         val micEnabled: Boolean,
         val cameraEnabled: Boolean,
+        val sharing: Boolean = false,
     ) {
         fun toJson(): JSONObject = JSONObject().apply {
             put("micEnabled", micEnabled)
             put("cameraEnabled", cameraEnabled)
+            put("sharing", sharing)
         }
 
         companion object {
@@ -181,6 +192,7 @@ internal object SignalingSchema {
                 PeerStatePayload(
                     o.optBoolean("micEnabled", true),
                     o.optBoolean("cameraEnabled", true),
+                    o.optBoolean("sharing", false),
                 )
         }
     }

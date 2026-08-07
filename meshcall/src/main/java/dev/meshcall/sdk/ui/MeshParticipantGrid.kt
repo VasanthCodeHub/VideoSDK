@@ -86,6 +86,16 @@ class MeshParticipantGrid(
     private var speakerId: String? = null
 
     /**
+     * The remote participant whose screen is taking over the view, or null.
+     *
+     * Only ever a *remote* id. Promoting our own share would point the capture at the very
+     * view rendering it — a hall-of-mirrors recursion — and is useless besides: while you
+     * present, the app you are showing is in the foreground, not this one. The local tile
+     * keeps showing the share small, which is the confirmation the sharer actually wants.
+     */
+    private var presenterId: String? = null
+
+    /**
      * Hard ceiling on grid tiles; the "You" tile always keeps one.
      *
      * This is a legibility floor, not a design preference: at ten tiles a phone-sized cell
@@ -124,6 +134,23 @@ class MeshParticipantGrid(
         tiles.values.forEach { it.pinBadge.visibility = visibleIf(it.peerId == peerId) }
         relayout()
     }
+
+    /**
+     * Give [peerId]'s screen the whole grid (null to return to the normal tile layout).
+     *
+     * Everything else — the other tiles and the overflow strip — is hidden while this is
+     * set, so the shared screen gets every pixel the container has. The tile is still a
+     * regular tile underneath, so its chrome, track binding, and teardown are unchanged.
+     */
+    fun setPresenter(peerId: String?) {
+        if (presenterId == peerId) return
+        presenterId = peerId
+        // Both the outgoing and the incoming presenter need their scaling re-evaluated.
+        tiles.values.forEach(::applyScaling)
+        relayout()
+    }
+
+    val presentingPeerId: String? get() = presenterId
 
     /** Mark [peerId] as the active speaker (null when nobody is talking). */
     fun setSpeaker(peerId: String?) {
@@ -310,6 +337,9 @@ class MeshParticipantGrid(
         renderer.setMirror(false)
         val tile = buildTile(participant.id, participant.userName, renderer, participant.avatarBase64)
         tiles[participant.id] = tile
+        // A tile built while a presentation is already running must letterboxed from its
+        // first frame, not from the next setPresenter() call.
+        applyScaling(tile)
         relayout()
         return tile
     }
@@ -548,9 +578,15 @@ class MeshParticipantGrid(
     }
 
     private fun applyChrome(tile: Tile, participant: MeshParticipant) {
-        tile.chip.text = participant.userName
+        val sharing = participant.isSharing
+        tile.chip.text =
+            if (sharing) context.getString(R.string.meshcall_peer_presenting, participant.userName)
+            else participant.userName
         applyMicIndicator(tile.micBadge, participant.micEnabled)
-        tile.camBadge.visibility = visibleIf(!participant.cameraEnabled)
+        // While they share, their camera badge and the avatar placeholder both describe a
+        // camera nobody is watching — the tile is carrying their screen. Showing either
+        // reads as "the presentation is broken". Same rule as [applyLocalChrome].
+        tile.camBadge.visibility = visibleIf(!participant.cameraEnabled && !sharing)
         tile.ring.visibility = visibleIf(tile.peerId == speakerId)
         tile.pinBadge.visibility = visibleIf(tile.peerId == pinnedId)
         tile.dot.setBackgroundResource(
@@ -560,8 +596,26 @@ class MeshParticipantGrid(
                 else -> R.drawable.dot_connecting
             },
         )
-        tile.placeholder.visibility =
-            visibleIf(!participant.cameraEnabled || tile.boundTrack == null)
+        tile.placeholder.visibility = visibleIf(
+            !sharing && (!participant.cameraEnabled || tile.boundTrack == null),
+        )
+    }
+
+    /**
+     * FIT for the presenter, FILL for everyone else.
+     *
+     * Cropping a face to fill a tile loses nothing that matters; cropping a shared screen
+     * cuts off the edges of the very thing being presented. This is the remote counterpart
+     * of the rule the local preview already follows while sharing.
+     */
+    private fun applyScaling(tile: Tile) {
+        // The local preview's scaling is driven by localSharing in the LocalVideoChanged
+        // handler, and it is never the presenter — leave it alone.
+        if (tile.peerId == LOCAL_PEER_ID) return
+        tile.renderer.setScalingType(
+            if (tile.peerId == presenterId) RendererCommon.ScalingType.SCALE_ASPECT_FIT
+            else RendererCommon.ScalingType.SCALE_ASPECT_FILL,
+        )
     }
 
     private fun initRenderer(renderer: MeshVideoRenderer, egl: EglBase.Context) {
@@ -714,6 +768,13 @@ class MeshParticipantGrid(
     private fun applyGrid() {
         val width = gridContainer.width
         val height = gridContainer.height
+
+        val presenter = presenterId?.takeIf { tiles.containsKey(it) }
+        if (presenter != null) {
+            applyPresenterGrid(presenter, width, height)
+            return
+        }
+
         val mainIds = mainTileIds()
         val overflowIds = tiles.keys.filter { it !in mainIds }
 
@@ -749,6 +810,32 @@ class MeshParticipantGrid(
         // the grid instantly; the strip shows compact avatar chips instead.
         overflowIds.forEach { tiles[it]?.frame?.visibility = View.GONE }
         syncOverflowChips(overflowIds)
+    }
+
+    /**
+     * Immersive presenter layout: one tile, edge to edge, nothing else on screen.
+     *
+     * No gutter and no companion tiles, unlike the row layout above — a shared screen is
+     * text-dense, and every pixel spent on a gap is a pixel of somebody's slide. The other
+     * tiles are only hidden, never torn down, so ending the share snaps straight back to
+     * the grid with every track still bound.
+     */
+    private fun applyPresenterGrid(presenter: String, width: Int, height: Int) {
+        tiles.forEach { (peerId, tile) -> tile.frame.visibility = visibleIf(peerId == presenter) }
+        // The strip would be a second, competing view of the meeting over the top of the
+        // presentation; it belongs to the grid layout only.
+        syncOverflowChips(emptyList())
+
+        if (width <= 0 || height <= 0) return
+        val tile = tiles[presenter] ?: return
+        val lp = tile.frame.layoutParams as FrameLayout.LayoutParams
+        lp.width = width
+        lp.height = height
+        lp.leftMargin = 0
+        lp.topMargin = 0
+        lp.rightMargin = 0
+        lp.bottomMargin = 0
+        tile.frame.layoutParams = lp
     }
 
     // ---- Overflow strip ------------------------------------------------------------
