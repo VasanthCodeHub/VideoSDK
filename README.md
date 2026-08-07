@@ -201,7 +201,7 @@ run on a dedicated single-thread executor.
 
 | Event | Payload | Notes |
 |-------|---------|-------|
-| `join-meeting` | `{ meeting, userId, userName, create, private }` | Sent on **every** connect *and* reconnect. Server replies `meeting-members` and broadcasts `peer-joined`, or refuses with `meeting-not-found`, or parks the socket with `awaiting-approval`. `private` is honored **only** on the join that creates the meeting. |
+| `join-meeting` | `{ meeting, userId, userName, create, private, avatar? }` | Sent on **every** connect *and* reconnect. Server replies `meeting-members` and broadcasts `peer-joined`, or refuses with `meeting-not-found`, or parks the socket with `awaiting-approval`. `private` is honored **only** on the join that creates the meeting. `avatar`, when present, is a small base64-encoded JPEG thumbnail, carried opaquely and stored per member; omitted (not sent) when the participant has no picture. |
 | `admit-decision` | `{ userId, admit }` | The host's verdict on one knock. Obeyed only from the host's own sockets. |
 | `check-meetings` | `{ meetings: [ code ] }` → **ack** `{ meetings: [ { meeting, participants, private } ] }` | Liveness lookup, answered over the Socket.IO ack. Allowed *before* `join-meeting` — the lobby asks precisely because it is in no meeting. Capped at 20 codes per call. |
 | `offer` | `{ to, sdp: { type: "offer", sdp } }` | Relay to `to`, inject `from`. |
@@ -213,13 +213,13 @@ run on a dedicated single-thread executor.
 
 | Event | Payload | Notes |
 |-------|---------|-------|
-| `meeting-members` | `{ meeting, peers: [ { userId, userName } ] }` | Roster after join/rejoin. Peer key is **`userId`**. |
+| `meeting-members` | `{ meeting, peers: [ { userId, userName, avatar? } ] }` | Roster after join/rejoin. Peer key is **`userId`**. |
 | `meeting-not-found` | `{ meeting }` | Join refused: no such live meeting, and `create` was not set. Terminal — the client disconnects and leaves the screen. |
 | `awaiting-approval` | `{ meeting }` | Private meeting: you are in the waiting room. The socket **stays connected** — it *is* the pending request, and dropping it withdraws the knock. |
 | `join-denied` | `{ meeting }` | The host said no. Terminal. |
 | `knock` | `{ userId, userName, meeting }` | To the host only. Re-sent to whoever inherits the host role, so a queued request is never orphaned. |
 | `knock-withdrawn` | `{ userId }` | To the host only: that person gave up or dropped. |
-| `peer-joined` | `{ userId, userName, meeting }` | Broadcast. |
+| `peer-joined` | `{ userId, userName, meeting, avatar? }` | Broadcast. |
 | `peer-left` | `{ peerId }` | Broadcast on disconnect. |
 | `offer` / `answer` | `{ from, sdp: {...} }` | Forwarded. |
 | `ice-candidate` | `{ from, candidate: {...} }` | Forwarded. |

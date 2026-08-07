@@ -53,6 +53,7 @@ internal sealed class SignalEvent {
         val peerId: String,
         val userName: String,
         val meetingId: String,
+        val avatarBase64: String? = null,
     ) : SignalEvent()
 
     /** A peer left the meeting (or the broker timed them out). */

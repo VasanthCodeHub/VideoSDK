@@ -71,11 +71,14 @@
                     android:paddingEnd="10dp"
                     android:paddingVertical="6dp">
 
-                    <ImageView
+                    <com.google.android.material.imageview.ShapeableImageView
+                        android:id="@+id/profile_avatar"
                         android:layout_width="18dp"
                         android:layout_height="18dp"
                         android:contentDescription="@string/account"
+                        android:scaleType="centerCrop"
                         android:src="@drawable/ic_account_circle"
+                        app:shapeAppearance="@style/ShapeAppearance.VideoCall.Circle"
                         app:tint="@color/on_surface" />
 
                     <TextView

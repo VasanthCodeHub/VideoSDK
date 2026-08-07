@@ -18,6 +18,7 @@ import dev.meshcall.sdk.R
 import dev.meshcall.sdk.api.MeshCall
 import dev.meshcall.sdk.api.MeshParticipant
 import dev.meshcall.sdk.internal.mesh.MeshMeetingManager
+import dev.meshcall.sdk.internal.util.AvatarBitmaps
 import dev.meshcall.sdk.internal.util.MeshLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -243,7 +244,7 @@ class MeshParticipantGrid(
         val preview = localPreview() ?: return
         initRenderer(preview, egl)
         preview.setMirror(manager.frontCameraActive.value)
-        ensureLocalTile(preview)
+        ensureLocalTile(preview, manager.avatarBase64)
         bindTrack(tiles[LOCAL_PEER_ID] ?: return, manager.localVideo())
         applyLocalChrome()
 
@@ -255,10 +256,15 @@ class MeshParticipantGrid(
     }
 
     /** Wrap the host's preview into a regular grid tile labelled "You". */
-    private fun ensureLocalTile(preview: MeshVideoRenderer) {
+    private fun ensureLocalTile(preview: MeshVideoRenderer, avatarBase64: String?) {
         if (tiles.containsKey(LOCAL_PEER_ID)) return
         (preview.parent as? ViewGroup)?.removeView(preview)
-        val tile = buildTile(LOCAL_PEER_ID, context.getString(R.string.meshcall_you), preview)
+        val tile = buildTile(
+            LOCAL_PEER_ID,
+            context.getString(R.string.meshcall_you),
+            preview,
+            avatarBase64,
+        )
         tile.dot.setBackgroundResource(R.drawable.dot_connected)
         tiles[LOCAL_PEER_ID] = tile
         relayout()
@@ -302,7 +308,7 @@ class MeshParticipantGrid(
         val renderer = MeshVideoRenderer(context)
         initRenderer(renderer, egl)
         renderer.setMirror(false)
-        val tile = buildTile(participant.id, participant.userName, renderer)
+        val tile = buildTile(participant.id, participant.userName, renderer, participant.avatarBase64)
         tiles[participant.id] = tile
         relayout()
         return tile
@@ -326,7 +332,12 @@ class MeshParticipantGrid(
      * differs — so they share this builder instead of two near-duplicate blocks that
      * drift apart over time.
      */
-    private fun buildTile(peerId: String, name: String, renderer: MeshVideoRenderer): Tile {
+    private fun buildTile(
+        peerId: String,
+        name: String,
+        renderer: MeshVideoRenderer,
+        avatarBase64: String? = null,
+    ): Tile {
         val isLocal = peerId == LOCAL_PEER_ID
         val frame = FrameLayout(context).apply {
             setBackgroundResource(R.drawable.bg_tile_frame)
@@ -338,7 +349,7 @@ class MeshParticipantGrid(
         // See README §7 rule 6.
         frame.addView(renderer, matchParent())
 
-        val placeholder = buildPlaceholder(name, peerId).apply { visibility = View.GONE }
+        val placeholder = buildPlaceholder(name, peerId, avatarBase64).apply { visibility = View.GONE }
         frame.addView(placeholder, matchParent())
 
         val chip = TextView(context).apply {
@@ -474,7 +485,7 @@ class MeshParticipantGrid(
     }
 
     /** Shown while the peer has no video, or their camera is off. */
-    private fun buildPlaceholder(name: String, peerId: String): View {
+    private fun buildPlaceholder(name: String, peerId: String, avatarBase64: String?): View {
         val layer = FrameLayout(context).apply {
             setBackgroundColor(color(R.color.meshcall_tile_placeholder_bg))
         }
@@ -482,16 +493,7 @@ class MeshParticipantGrid(
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
-        val avatar = TextView(context).apply {
-            text = initialsFor(name)
-            setTextColor(Color.WHITE)
-            textSize = 22f
-            gravity = Gravity.CENTER
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(avatarPalette[peerId.hashCode().mod(avatarPalette.size)])
-            }
-        }
+        val avatar = buildAvatarView(name, peerId, avatarBase64, textSizeSp = 22f)
         inner.addView(avatar, LinearLayout.LayoutParams(dp(64), dp(64)))
         inner.addView(
             TextView(context).apply {
@@ -514,6 +516,35 @@ class MeshParticipantGrid(
             ),
         )
         return layer
+    }
+
+    /**
+     * A circular avatar view: the participant's photo when they have one, else their
+     * initials over a color drawn from their id. Caller supplies the size via LayoutParams.
+     */
+    private fun buildAvatarView(
+        name: String,
+        peerId: String,
+        avatarBase64: String?,
+        textSizeSp: Float,
+    ): View {
+        val bitmap = AvatarBitmaps.decodeCircular(avatarBase64)
+        if (bitmap != null) {
+            return ImageView(context).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageBitmap(bitmap)
+            }
+        }
+        return TextView(context).apply {
+            text = initialsFor(name)
+            setTextColor(Color.WHITE)
+            textSize = textSizeSp
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(avatarPalette[peerId.hashCode().mod(avatarPalette.size)])
+            }
+        }
     }
 
     private fun applyChrome(tile: Tile, participant: MeshParticipant) {

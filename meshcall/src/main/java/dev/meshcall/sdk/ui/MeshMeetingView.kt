@@ -26,6 +26,7 @@ import dev.meshcall.sdk.api.AudioRouteState
 import dev.meshcall.sdk.api.JoinRequest
 import dev.meshcall.sdk.api.MeshCall
 import dev.meshcall.sdk.api.MeshParticipant
+import dev.meshcall.sdk.internal.util.AvatarBitmaps
 import dev.meshcall.sdk.internal.util.MeshLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -547,7 +548,16 @@ class MeshMeetingView @JvmOverloads constructor(
         }
         roster.forEachIndexed { index, participant ->
             val row = participantRows[index]
-            row.avatarLabel.text = initialOf(participant.userName)
+            val photo = AvatarBitmaps.decodeCircular(participant.avatarBase64)
+            if (photo != null) {
+                row.avatarImage.setImageBitmap(photo)
+                row.avatarImage.visibility = View.VISIBLE
+                row.avatarLabel.visibility = View.GONE
+            } else {
+                row.avatarLabel.text = initialOf(participant.userName)
+                row.avatarLabel.visibility = View.VISIBLE
+                row.avatarImage.visibility = View.GONE
+            }
             row.nameLabel.text = participant.userName
             applyRowMicButton(row.micButton, participant)
             applyRowCameraIcon(row.cameraIcon, participant)
@@ -555,13 +565,18 @@ class MeshMeetingView @JvmOverloads constructor(
     }
 
     /**
-     * One row: initial avatar, name, a mic icon that mutes that participant on tap, and a
-     * camera icon that mirrors their on/off state (informational only — this SDK has no
-     * way to force someone's camera off).
+     * One row: avatar (photo if the participant chose one, else their initial), name, a
+     * mic icon that mutes that participant on tap, and a camera icon that mirrors their
+     * on/off state (informational only — this SDK has no way to force someone's camera off).
+     *
+     * [avatarLabel] and [avatarImage] occupy the same slot; [renderParticipants] toggles
+     * which is visible per participant rather than rebuilding the row, since rows are
+     * reused positionally as the roster reorders.
      */
     private class ParticipantRow(
         val root: LinearLayout,
         val avatarLabel: TextView,
+        val avatarImage: ImageView,
         val nameLabel: TextView,
         val micButton: ImageButton,
         val cameraIcon: ImageView,
@@ -580,12 +595,20 @@ class MeshMeetingView @JvmOverloads constructor(
 
         val avatarSize = dp(32)
         val avatarLabel = TextView(context).apply {
-            layoutParams = LinearLayout.LayoutParams(avatarSize, avatarSize)
             background = ContextCompat.getDrawable(context, R.drawable.meshcall_bg_avatar)
             gravity = Gravity.CENTER
             setTextColor(color(R.color.meshcall_white))
             textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
+        }
+        val avatarImage = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            visibility = View.GONE
+        }
+        val avatarWrap = FrameLayout(context).apply {
+            layoutParams = LinearLayout.LayoutParams(avatarSize, avatarSize)
+            addView(avatarLabel, FrameLayout.LayoutParams(avatarSize, avatarSize))
+            addView(avatarImage, FrameLayout.LayoutParams(avatarSize, avatarSize))
         }
 
         val nameLabel = TextView(context).apply {
@@ -618,11 +641,11 @@ class MeshMeetingView @JvmOverloads constructor(
             imageTintList = ColorStateList.valueOf(color(R.color.meshcall_white))
         }
 
-        root.addView(avatarLabel)
+        root.addView(avatarWrap)
         root.addView(nameLabel)
         root.addView(micButton)
         root.addView(cameraIcon)
-        return ParticipantRow(root, avatarLabel, nameLabel, micButton, cameraIcon)
+        return ParticipantRow(root, avatarLabel, avatarImage, nameLabel, micButton, cameraIcon)
     }
 
     /**

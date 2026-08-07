@@ -1,5 +1,6 @@
 package dev.meshcall.sdk.internal.signaling
 
+import dev.meshcall.sdk.internal.signaling.SignalingSchema.optStringOrNull
 import dev.meshcall.sdk.internal.util.MeshLog
 import io.socket.client.IO
 import io.socket.client.Socket
@@ -24,6 +25,7 @@ internal class SocketIOSignalingClient(
     private val url: String,
     private val userId: String,
     private val userName: String,
+    private val avatarBase64: String? = null,
 ) : SignalingClient {
 
     private val _events = MutableSharedFlow<SignalEvent>(replay = 4, extraBufferCapacity = 64)
@@ -88,6 +90,7 @@ internal class SocketIOSignalingClient(
                         j.optString(SignalingSchema.KEY_USER_ID),
                         j.optString(SignalingSchema.KEY_USER_NAME),
                         j.optString(SignalingSchema.KEY_MEETING, currentMeetingId.orEmpty()),
+                        j.optStringOrNull(SignalingSchema.KEY_AVATAR),
                     ),
                 )
             }
@@ -239,6 +242,7 @@ internal class SocketIOSignalingClient(
                 put(SignalingSchema.KEY_USER_NAME, userName)
                 put(SignalingSchema.KEY_CREATE, createIfMissing || established)
                 put(SignalingSchema.KEY_PRIVATE, isPrivate)
+                if (!avatarBase64.isNullOrBlank()) put(SignalingSchema.KEY_AVATAR, avatarBase64)
             },
         )
     }

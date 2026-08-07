@@ -43,11 +43,45 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="32dp">
+
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/iv_avatar"
+                    android:layout_width="96dp"
+                    android:layout_height="96dp"
+                    android:background="@color/surface_container_high"
+                    android:contentDescription="@string/avatar_content_description"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_account_circle"
+                    app:shapeAppearance="@style/ShapeAppearance.VideoCall.Circle"
+                    app:tint="@color/on_surface_variant" />
+
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/avatar_edit_badge"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="bottom|end"
+                    android:background="@color/primary"
+                    android:contentDescription="@null"
+                    android:elevation="2dp"
+                    android:padding="6dp"
+                    android:src="@drawable/ic_edit"
+                    app:shapeAppearance="@style/ShapeAppearance.VideoCall.Circle"
+                    app:strokeColor="@color/background"
+                    app:strokeWidth="2dp"
+                    app:tint="@color/on_primary" />
+
+            </FrameLayout>
+
             <TextView
                 android:id="@+id/name_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="40dp"
+                android:layout_marginTop="24dp"
                 android:text="@string/name_entry_title"
                 android:textColor="@color/on_surface"
                 android:textSize="28sp"

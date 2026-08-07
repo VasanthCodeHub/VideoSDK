@@ -71,6 +71,11 @@ class MeshCall(context: Context) {
      *   in [Admission.AWAITING_APPROVAL] until the host answers their [joinRequests]
      *   entry. Only meaningful together with [createIfMissing] — privacy is a property of
      *   the meeting, fixed when it is opened, and enforced by the broker.
+     * @param avatarBase64 a small base64-encoded JPEG thumbnail broadcast to the others,
+     *   shown in place of the initials placeholder (video off, participants list). Fixed
+     *   for the session, like [displayName] — pick it before calling [join]. Requires the
+     *   broker to relay the `avatar` field (see `SignalingSchema`); older brokers just
+     *   ignore it and everyone falls back to initials.
      */
     fun join(
         brokerUrl: String,
@@ -79,9 +84,10 @@ class MeshCall(context: Context) {
         config: MeshCallConfig = MeshCallConfig(),
         createIfMissing: Boolean = false,
         isPrivate: Boolean = false,
+        avatarBase64: String? = null,
     ) {
         leave()
-        val manager = MeshMeetingManager(appContext, brokerUrl, userId, displayName)
+        val manager = MeshMeetingManager(appContext, brokerUrl, userId, displayName, avatarBase64)
         managerFlow.value = manager
         currentMeetingId = meetingId
         manager.join(meetingId, MediaConfig.from(config), createIfMissing, isPrivate)
@@ -112,6 +118,7 @@ class MeshCall(context: Context) {
                     micEnabled = it.micEnabled,
                     cameraEnabled = it.cameraEnabled,
                     connectionState = it.connectionState,
+                    avatarBase64 = it.avatarBase64,
                 )
             }
         } ?: flowOf(emptyList())
@@ -279,6 +286,8 @@ data class MeshParticipant(
     val cameraEnabled: Boolean,
     /** "new" | "connecting" | "connected" | "completed" | "disconnected" | "failed" | "closed" */
     val connectionState: String = "new",
+    /** Base64 JPEG thumbnail this participant joined with, or null if they chose none. */
+    val avatarBase64: String? = null,
 )
 
 /** High-level session status. */

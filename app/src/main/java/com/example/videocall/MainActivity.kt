@@ -121,6 +121,7 @@ class MainActivity : AppCompatActivity() {
             config = MeshCallConfig(iceServers = ICE_SERVERS),
             createIfMissing = intent.getBooleanExtra(EXTRA_CREATE, false),
             isPrivate = intent.getBooleanExtra(EXTRA_PRIVATE, false),
+            avatarBase64 = userPreferences.avatarBase64(),
         )
         binding.meetingView.attach(mesh, meetingId, showConnectionBanner = true)
 

@@ -50,6 +50,8 @@ internal class MeshMeetingManager(
     private val brokerUrl: String,
     private val userId: String,
     private val userName: String,
+    /** Base64 thumbnail broadcast to peers and used for our own tile's placeholder. */
+    val avatarBase64: String? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -61,6 +63,9 @@ internal class MeshMeetingManager(
 
     /** Roster names in arrival order, so tiles keep a stable position between updates. */
     private val remoteNames = LinkedHashMap<String, String>()
+
+    /** Avatar thumbnail per peer, keyed the same as [remoteNames]; null means none chosen. */
+    private val remoteAvatars = HashMap<String, String?>()
 
     /** Last known media state per peer, so roster rebuilds don't drop "muted" indicators. */
     private val remoteMedia = HashMap<String, Pair<Boolean, Boolean>>()
@@ -175,7 +180,7 @@ internal class MeshMeetingManager(
         _localMedia.value = LocalMediaState(eng.isMicEnabled, eng.isCameraEnabled)
         _frontCameraActive.value = eng.isFrontCamera
 
-        val client = SocketIOSignalingClient(brokerUrl, userId, userName)
+        val client = SocketIOSignalingClient(brokerUrl, userId, userName, avatarBase64)
         signaling = client
         _signalingConnected.value = false
 
@@ -248,6 +253,7 @@ internal class MeshMeetingManager(
         when (event) {
             is SignalEvent.PeerJoined -> {
                 remoteNames[event.peerId] = event.userName
+                remoteAvatars[event.peerId] = event.avatarBase64
                 ensureLinkTo(event.peerId)
                 publishPeers()
             }
@@ -266,10 +272,13 @@ internal class MeshMeetingManager(
                 val ids = event.peers.map { it.id }.filter { it != userId }
                 // Reconcile: adopt the roster order, link to anyone new, drop the gone.
                 val known = remoteNames.toMap()
+                val knownAvatars = remoteAvatars.toMap()
                 remoteNames.clear()
+                remoteAvatars.clear()
                 event.peers.forEach { peer ->
                     if (peer.id != userId) {
                         remoteNames[peer.id] = peer.userName.ifEmpty { known[peer.id] ?: peer.id }
+                        remoteAvatars[peer.id] = peer.avatarBase64 ?: knownAvatars[peer.id]
                     }
                 }
                 ids.forEach(::ensureLinkTo)
@@ -467,6 +476,7 @@ internal class MeshMeetingManager(
         engine?.releasePeer(peerId)
         detachSpeakerSink(peerId)
         remoteNames.remove(peerId)
+        remoteAvatars.remove(peerId)
         remoteMedia.remove(peerId)
         iceStateByPeer.remove(peerId)
         relinkAttempts.remove(peerId)
@@ -497,6 +507,7 @@ internal class MeshMeetingManager(
                 micEnabled = mic,
                 cameraEnabled = cam,
                 connectionState = iceStateByPeer[id] ?: "new",
+                avatarBase64 = remoteAvatars[id],
             )
         }
     }
@@ -667,6 +678,7 @@ internal class MeshMeetingManager(
         connections.values.forEach { it.dispose() }
         connections.clear()
         remoteNames.clear()
+        remoteAvatars.clear()
         remoteMedia.clear()
         iceStateByPeer.clear()
         relinkAttempts.clear()
@@ -709,6 +721,7 @@ internal class MeshMeetingManager(
         val micEnabled: Boolean,
         val cameraEnabled: Boolean,
         val connectionState: String = "new",
+        val avatarBase64: String? = null,
     )
 
     /** Media/track lifecycle event surfaced to the view layer. */

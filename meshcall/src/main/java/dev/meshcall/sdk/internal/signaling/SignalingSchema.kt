@@ -13,7 +13,7 @@ import org.json.JSONObject
  * `{type, payload}` envelope; the event name is the type.
  *
  * Client → server:
- *   join-meeting   { meeting, userId, userName, create, private }
+ *   join-meeting   { meeting, userId, userName, create, private, avatar? }
  *   admit-decision { userId, admit }                               // host only
  *   check-meetings { meetings: [ code ] }                          // Socket.IO ack reply
  *   offer          { to, sdp: { type, sdp } }
@@ -23,13 +23,13 @@ import org.json.JSONObject
  *   mute-request   { to }
  *
  * Server → client (the broker always injects `from`):
- *   meeting-members   { meeting, peers: [ { userId, userName } ] }
+ *   meeting-members   { meeting, peers: [ { userId, userName, avatar? } ] }
  *   meeting-not-found { meeting }
  *   awaiting-approval { meeting }                                  // private: you knocked
  *   join-denied       { meeting }                                  // private: host said no
  *   knock             { userId, userName, meeting }                // host only
  *   knock-withdrawn   { userId }                                   // host only
- *   peer-joined       { userId, userName, meeting }
+ *   peer-joined       { userId, userName, meeting, avatar? }
  *   peer-left         { peerId }
  *   offer / answer    { from, sdp: {...} }
  *   ice-candidate     { from, candidate: {...} }
@@ -53,6 +53,13 @@ import org.json.JSONObject
  * an established participant back to the waiting room, and `admit-decision` is obeyed
  * only from the host's own sockets.
  *
+ * `avatar`, where present, is a small base64-encoded JPEG thumbnail (see
+ * `UserPreferences.saveAvatar` in the app module for the encode side) carried opaquely —
+ * the broker never decodes or inspects it, only stores it alongside `userId`/`userName` per
+ * member and echoes it back in the roster and join events. Omitted (not empty-string) when
+ * the participant has no picture, so a receiver's "no avatar" and "avatar not sent yet" are
+ * never confused.
+ *
  * `mute-request` is a client-only contract today: the broker in `VideoSDKServer/server`
  * does not yet relay it, so [SocketIOSignalingClient] emits/listens for it but no
  * `mute-request` will actually reach a peer until the broker adds a matching handler
@@ -66,6 +73,7 @@ internal object SignalingSchema {
     const val KEY_MEETING = "meeting"
     const val KEY_USER_ID = "userId"
     const val KEY_USER_NAME = "userName"
+    const val KEY_AVATAR = "avatar"
     const val KEY_FROM = "from"
     const val KEY_TO = "to"
     const val KEY_SDP = "sdp"
@@ -102,15 +110,21 @@ internal object SignalingSchema {
     data class MeetingPeerInfo(
         val id: String,
         val userName: String,
+        val avatarBase64: String? = null,
     ) {
         fun toJson(): JSONObject = JSONObject().apply {
             put(KEY_USER_ID, id)
             put(KEY_USER_NAME, userName)
+            if (avatarBase64 != null) put(KEY_AVATAR, avatarBase64)
         }
 
         companion object {
             fun fromJson(o: JSONObject): MeetingPeerInfo =
-                MeetingPeerInfo(o.optString(KEY_USER_ID), o.optString(KEY_USER_NAME))
+                MeetingPeerInfo(
+                    o.optString(KEY_USER_ID),
+                    o.optString(KEY_USER_NAME),
+                    o.optStringOrNull(KEY_AVATAR),
+                )
         }
     }
 
@@ -171,6 +185,6 @@ internal object SignalingSchema {
         }
     }
 
-    private fun JSONObject.optStringOrNull(key: String): String? =
+    internal fun JSONObject.optStringOrNull(key: String): String? =
         if (isNull(key)) null else optString(key)
 }

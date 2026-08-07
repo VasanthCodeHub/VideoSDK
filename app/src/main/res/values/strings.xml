@@ -12,6 +12,8 @@
     <string name="your_name_hint">Your name</string>
     <string name="enter_your_name">Enter your name to continue</string>
     <string name="change_name">Change your name</string>
+    <string name="avatar_content_description">Your profile picture</string>
+    <string name="tap_to_change_photo">Tap to change your photo</string>
 
     <!-- Lobby -->
     <string name="lobby_subtitle">Create a meeting to start a call, or join one with a shared meeting code.</string>

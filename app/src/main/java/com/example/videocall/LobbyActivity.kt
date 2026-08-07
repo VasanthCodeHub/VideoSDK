@@ -4,12 +4,14 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
@@ -64,7 +66,20 @@ class LobbyActivity : AppCompatActivity() {
         super.onResume()
         // Re-read on resume: the name screen may have just changed it.
         binding.profileName.text = userPreferences.displayName
+        renderProfileAvatar()
         loadRecentMeetings()
+    }
+
+    private fun renderProfileAvatar() {
+        val avatar = userPreferences.loadAvatarBitmap()
+        if (avatar != null) {
+            binding.profileAvatar.imageTintList = null
+            binding.profileAvatar.setImageBitmap(avatar)
+        } else {
+            binding.profileAvatar.imageTintList =
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.on_surface))
+            binding.profileAvatar.setImageResource(R.drawable.ic_account_circle)
+        }
     }
 
     /**
